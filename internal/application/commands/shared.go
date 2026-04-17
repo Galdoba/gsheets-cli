@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	dataCredFile  = "credFile"
-	dataSheetID   = "sheetID"
-	dataSheetName = "sheetName"
+	dataCredFile            = "credFile"
+	dataSheetID             = "sheetID"
+	dataSheetName           = "sheetName"
+	dataSpreadsheetheetName = "spreadsheetName"
 )
 
 // getService initializes the Sheets API client with service account credentials
@@ -86,6 +87,7 @@ func getSpreadsheetData(cmd *cli.Command, cfg config.Config) (map[string]string,
 	}
 
 	lastSheetID, lastTableName := extractSheetIdAndName(cfg)
+	fmt.Printf("lastSheetID: %q\n", lastSheetID)
 
 	sheetID := getPrioritized(
 		cmd.Root().String(flags.Spreadsheet),

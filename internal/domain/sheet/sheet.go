@@ -13,7 +13,8 @@ import (
 )
 
 type SheetCache struct {
-	SheetID    string               `json:"sheet_id"`
+	SpreadsheetTitle string `json:"spreadsheet_title"`
+	// SheetID          string               `json:"sheet_id"`
 	SheetName  string               `json:"sheet_name"`
 	RevisionID string               `json:"revision_id"`
 	LastSync   time.Time            `json:"last_sync"`
@@ -22,9 +23,10 @@ type SheetCache struct {
 	Cells      map[string]cell.Cell `json:"cells"`
 }
 
-func New(id, name string) *SheetCache {
+func New(title, name string) *SheetCache {
 	sc := SheetCache{
-		SheetID:   id,
+		SpreadsheetTitle: title,
+		// SheetID:          id,
 		SheetName: name,
 		Cells:     make(map[string]cell.Cell),
 	}
@@ -144,5 +146,44 @@ func (sc *SheetCache) SaveAs(path string) error {
 	if err := os.WriteFile(path, data, 0666); err != nil {
 		return fmt.Errorf("failed to write data: %w", err)
 	}
+	return nil
+}
+
+func (sc *SheetCache) CreateCell(c cell.Cell) error {
+	if _, ok := sc.Cells[c.A1]; ok {
+		return fmt.Errorf("cell %q already exists", c.A1)
+	}
+	if err := c.Validate(); err != nil {
+		return fmt.Errorf("can't create invalid cell: %w", err)
+	}
+	c.UpdatedAt = time.Now()
+	sc.Cells[c.A1] = c
+	return nil
+}
+
+func (sc *SheetCache) ReadCell(a1 string) (cell.Cell, bool) {
+	if c, ok := sc.Cells[a1]; ok {
+		return c, ok
+	}
+	return cell.Cell{}, false
+}
+
+func (sc *SheetCache) UpdateCell(c cell.Cell) error {
+	if _, ok := sc.Cells[c.A1]; !ok {
+		return fmt.Errorf("cell %q does not exist", c.A1)
+	}
+	if err := c.Validate(); err != nil {
+		return fmt.Errorf("cell invalid: %w", err)
+	}
+	c.UpdatedAt = time.Now()
+	sc.Cells[c.A1] = c
+	return nil
+}
+
+func (sc *SheetCache) Delete(a1 string) error {
+	if _, ok := sc.Cells[a1]; !ok {
+		return fmt.Errorf("cell %q does not exist", a1)
+	}
+	delete(sc.Cells, a1)
 	return nil
 }

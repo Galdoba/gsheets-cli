@@ -6,6 +6,7 @@ import (
 	"gsheets-cli/internal/application/flags"
 	"gsheets-cli/internal/domain/sheet"
 	"gsheets-cli/internal/infrastructure/config"
+	"gsheets-cli/internal/infrastructure/storage/jsonstore"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -39,7 +40,7 @@ func readAction(cfg config.Config) cli.ActionFunc {
 			return err
 		}
 
-		fields := "sheets(data(rowData(values(formattedValue,note))))"
+		fields := "properties/title,sheets(data(rowData(values(formattedValue,note))))"
 		actualID := extractSheetID(parameters[dataSheetID])
 		tableName := parameters[dataSheetName]
 
@@ -53,14 +54,19 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		if err != nil {
 			return fmt.Errorf("failed to read spreadsheet: %w", err)
 		}
+		title := "spreadsheet"
+		if resp.Properties != nil {
+			title = resp.Properties.Title
+		}
 		fmt.Println("updating...")
 
-		sc := sheet.New(actualID, tableName)
+		sc := sheet.New(title, tableName)
 		if len(resp.Sheets) > 0 { //TODO: later we must have ability to read multile tables in a row
 			sc.UpdateGridData(resp.Sheets[0])
 		} else {
 			fmt.Println("⚠️  No data found in the specified sheet. (sheets)")
 		}
+		jsonstore.New(title, tableName)
 
 		fmt.Println("saving...")
 		if err := sc.SaveAs(outputFile); err != nil {

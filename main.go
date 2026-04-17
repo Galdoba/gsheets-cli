@@ -146,6 +146,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 }
 
 func main() {
+	panic("this is prototype not intended to work")
 	app := &cli.Command{
 		Name:        "gsheets-cli",
 		Usage:       "Cross-platform CLI for Google Sheets operations",

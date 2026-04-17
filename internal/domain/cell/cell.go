@@ -131,6 +131,20 @@ func letterToColumn(letters string) (int, error) {
 	return col, nil
 }
 
+func (c Cell) Validate() error {
+	row, col, err := A1ToPosition(c.A1)
+	if err != nil {
+		return err
+	}
+	if c.Row != row || c.Col != col {
+		return fmt.Errorf("actual row, col (%d,%d) do not match projected (%d,%d)", c.Row, c.Col, row, col)
+	}
+	pos := PositionToA1(row, col)
+	if c.A1 != pos {
+		return fmt.Errorf("actual cell name (%q) do not match projected (%q)", c.A1, pos)
+	}
+	return nil
+}
 func Equal(c1, c2 Cell) bool {
 	for _, match := range []bool{
 		c1.A1 == c2.A1,

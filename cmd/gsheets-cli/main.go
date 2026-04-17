@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"gsheets-cli/internal/application"
 	"gsheets-cli/internal/application/commands"
 	"gsheets-cli/internal/application/flags"
 	"gsheets-cli/internal/infrastructure"
@@ -19,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 	app := cli.Command{
-		Name:    infrastructure.AppName,
+		Name:    application.AppName,
 		Aliases: []string{},
 		Commands: []*cli.Command{
 			commands.Read(inf.Config),
