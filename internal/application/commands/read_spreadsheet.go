@@ -6,7 +6,7 @@ import (
 	"gsheets-cli/internal/application/flags"
 	"gsheets-cli/internal/domain/sheet"
 	"gsheets-cli/internal/infrastructure/config"
-	"gsheets-cli/internal/infrastructure/storage/jsonstore"
+	"gsheets-cli/internal/infrastructure/storage"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -32,7 +32,6 @@ func readAction(cfg config.Config) cli.ActionFunc {
 			return fmt.Errorf("failed to collect spreadsheet data: %w", err)
 		}
 
-		outputFile := "/home/galdoba/go/src/github.com/Galdoba/gsheets-cli/cmd/gsheets-cli/output.json"
 		fmt.Println("service created...")
 
 		srv, err := getService(ctx, parameters[dataCredFile])
@@ -60,20 +59,30 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		}
 		fmt.Println("updating...")
 
-		sc := sheet.New(title, tableName)
-		if len(resp.Sheets) > 0 { //TODO: later we must have ability to read multile tables in a row
-			sc.UpdateGridData(resp.Sheets[0])
+		fetched := sheet.New(title, tableName)
+		if len(resp.Sheets) > 0 {
+			fetched.UpdateGridData(resp.Sheets[0])
 		} else {
-			fmt.Println("⚠️  No data found in the specified sheet. (sheets)")
+			fmt.Println("⚠️  No data found in the specified sheet.")
 		}
-		jsonstore.New(title, tableName)
+
+		fmt.Println("loading storage...")
+		store, err := storage.New(title, tableName)
+		if err != nil {
+			return fmt.Errorf("failed to initialize storage: %w", err)
+		}
+
+		fmt.Println("merging data...")
+		if err := store.Merge(fetched); err != nil {
+			return fmt.Errorf("failed to merge data: %w", err)
+		}
 
 		fmt.Println("saving...")
-		if err := sc.SaveAs(outputFile); err != nil {
-			return fmt.Errorf("failed to save table data: %w", err)
+		if err := store.Save(); err != nil {
+			return fmt.Errorf("failed to save storage: %w", err)
 		}
 
-		fmt.Printf("✅ Successfully saved %d rows to %s\n", sc.Rows, outputFile)
+		fmt.Printf("✅ Successfully synced %d rows to local storage\n", fetched.Rows)
 		return nil
 	}
 }

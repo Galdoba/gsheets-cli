@@ -1,13 +1,14 @@
 package storage
 
 import (
-	"gsheets-cli/internal/domain/cell"
 	"gsheets-cli/internal/infrastructure/storage/jsonstore"
+
+	"gsheets-cli/internal/domain/sheet"
 )
 
 type Storage interface {
-	Load(...string) (map[string]cell.Cell, error)
-	Merge(...cell.Cell) error
+	Load() (*sheet.SheetCache, error)
+	Merge(*sheet.SheetCache) error
 	Save() error
 }
 
