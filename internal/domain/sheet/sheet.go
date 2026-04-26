@@ -187,3 +187,7 @@ func (sc *SheetCache) Delete(a1 string) error {
 	delete(sc.Cells, a1)
 	return nil
 }
+
+func (sc *SheetCache) GetCell(row, col int) cell.Cell {
+	return sc.Cells[cell.PositionToA1(row, col)]
+}

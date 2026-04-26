@@ -160,3 +160,7 @@ func Equal(c1, c2 Cell) bool {
 	}
 	return true
 }
+
+func ColIndexToLetter(col int) string {
+	return colToLetter(col)
+}

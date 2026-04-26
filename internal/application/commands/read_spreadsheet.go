@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"gsheets-cli/internal/application/flags"
+	"gsheets-cli/internal/domain/cell"
+	"gsheets-cli/internal/domain/render"
 	"gsheets-cli/internal/domain/sheet"
+	"gsheets-cli/internal/domain/view"
 	"gsheets-cli/internal/infrastructure/config"
 	"gsheets-cli/internal/infrastructure/storage"
 	"strings"
@@ -83,6 +86,26 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		}
 
 		fmt.Printf("✅ Successfully synced %d rows to local storage\n", fetched.Rows)
+		preset := view.DefaultPreset()
+		preset.Columns = make(map[int]view.ColumnConfig)
+		for i := 0; i < 17; i++ {
+
+			preset.Columns[i] = view.ColumnConfig{
+				Index:          i,
+				RenderPosition: i,
+				Letter:         cell.ColIndexToLetter(i),
+				Visibility:     view.ColVisible,
+				WidthMode:      0,
+				WidthValue:     0,
+				AlignRight:     false,
+				FormatHint:     "",
+				NoteHint:       "",
+				Frosen:         false,
+				GroupID:        "",
+			}
+		}
+		fmt.Println(render.Render(fetched, &preset).String())
+
 		return nil
 	}
 }
