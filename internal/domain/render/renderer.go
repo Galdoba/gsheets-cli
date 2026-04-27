@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"gsheets-cli/internal/domain/cell"
 	"gsheets-cli/internal/domain/sheet"
 	"gsheets-cli/internal/domain/view"
@@ -15,6 +16,7 @@ import (
 //   - Внутренняя логика Render использует 0-базированные индексы для итерации.
 //   - При доступе к данным происходит явная конвертация: 0→1.
 func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
+	fmt.Println("inject", len(data.Cells), "cells")
 	if preset == nil {
 		p := view.DefaultPreset()
 		preset = &p
@@ -31,7 +33,7 @@ func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
 		ComputedWidth int // Финальная ширина в экранных позициях
 	}
 	var visibleCols []visibleCol
-
+	fmt.Println("data cols", data.Cols)
 	// Итерируемся по колонкам исходных данных (0-based цикл)
 	// data.Cols содержит количество колонок, индексы 0..Cols-1
 	for col := 0; col < data.Cols; col++ {
@@ -39,7 +41,9 @@ func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
 		if !ok {
 			// Если правила нет, используем дефолт: видимая, авто-ширина
 			cfg = view.ColumnConfig{Visibility: view.ColVisible, WidthMode: view.WidthMax}
+			fmt.Println("force rule columm", col)
 		}
+		fmt.Println("rule columm:", col, cfg)
 		if cfg.Visibility == view.ColHidden {
 			continue
 		}
@@ -87,7 +91,9 @@ func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
 		if vc.ComputedWidth < 1 {
 			vc.ComputedWidth = 1
 		}
+		// fmt.Println(i, vc.ComputedWidth)
 	}
+	// panic(0)
 
 	// Вычисляем общую ширину канваса с учётом разделителей
 	separatorWidth := 0
@@ -106,6 +112,8 @@ func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
 		separatorHeight = 1
 	}
 	totalHeight := headerHeight + separatorHeight + len(visibleRows)
+
+	fmt.Println("total height", totalHeight)
 
 	// ========================================================================
 	// PHASE 3: RASTERIZATION — создание и заполнение буфера
@@ -170,7 +178,7 @@ func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
 	// 3.3 Отрисовка данных
 	// ------------------------------------------------------------------------
 	dataStartY := headerHeight + separatorHeight
-
+	fmt.Println(len(visibleRows), "visible rows")
 	for rowIdx, row := range visibleRows {
 		y := dataStartY + rowIdx
 		xPos = 0
@@ -214,7 +222,9 @@ func Render(data *sheet.SheetCache, preset *view.Preset) Canvas {
 				xPos++
 			}
 		}
+		// fmt.Println(canvas.RowToString(rowIdx))
 	}
+	// panic("debug stop")
 
 	return canvas
 }
@@ -233,4 +243,12 @@ func trimToWidth(s string, maxWidth int) string {
 		w += runeWidth(r)
 	}
 	return s
+}
+func (c Canvas) RowToString(i int) string {
+	if i < 0 || i >= c.height {
+		return ""
+	}
+	start := i * c.width
+	end := start + c.width
+	return string(c.buffer[start:end])
 }

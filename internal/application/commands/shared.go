@@ -18,6 +18,8 @@ const (
 	dataSheetID             = "sheetID"
 	dataSheetName           = "sheetName"
 	dataSpreadsheetheetName = "spreadsheetName"
+	dataLastSheetName       = "lastSpreadsheetName"
+	dataLastTableName       = "lastTableName"
 )
 
 // getService initializes the Sheets API client with service account credentials
@@ -109,5 +111,9 @@ func getSpreadsheetData(cmd *cli.Command, cfg config.Config) (map[string]string,
 	data[dataCredFile] = credFile
 	data[dataSheetID] = sheetID
 	data[dataSheetName] = sheetName
+	lastSheet, lastTable := cfg.LastUsedTable()
+	data[dataLastSheetName] = lastSheet
+	data[dataLastTableName] = lastTable
+
 	return data, nil
 }

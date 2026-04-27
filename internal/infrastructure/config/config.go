@@ -1,5 +1,9 @@
 package config
 
+import (
+	"strings"
+)
+
 type Config struct {
 	Credentials Credentials  `toml:"credentials"`
 	Sheets      Spreadsheets `toml:"sheets"`
@@ -40,4 +44,13 @@ func Default() Config {
 			},
 		},
 	}
+}
+
+func (cfg Config) LastUsedTable() (string, string) {
+	lut := cfg.Sheets.LastUsedTable
+	data := strings.Split(lut, "::")
+	if len(data) != 2 {
+		return "", ""
+	}
+	return data[0], data[1]
 }

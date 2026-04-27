@@ -43,5 +43,5 @@ type ColumnConfig struct {
 	NoteHint       string `json:"note_hint"`
 	Frosen         bool   `json:"frosen"`
 	GroupID        string `json:"group_id"`
-	computedWidth  int    `json:"-"`
+	// computedWidth  int    `json:"-"`
 }

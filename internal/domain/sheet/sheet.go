@@ -41,29 +41,41 @@ func (sc *SheetCache) UpdateGridData(sheet *sheets.Sheet) {
 	case true:
 		sc.populateBy(fetched)
 	}
+	sc.UpdateDimentions()
 }
 
 func (sc *SheetCache) updateBy(fetched map[string]cell.Cell) {
-	maxRow := 0
 	updated := 0
 	for position, newCell := range fetched {
 		oldCell := sc.Cells[position]
-		maxRow = max(maxRow, newCell.Row)
 		if cell.Equal(oldCell, newCell) {
 			continue
 		}
 		newCell.UpdatedAt = time.Now()
+
 		sc.Cells[position] = newCell
 		updated++
 	}
+	if updated > 0 {
+		sc.LastSync = time.Now()
+	}
+}
+
+func (sc *SheetCache) UpdateDimentions() {
+	maxRow := 0
+	maxCol := 0
+	for _, c := range sc.Cells {
+		maxRow = max(maxRow, c.Row)
+		maxCol = max(maxCol, c.Col)
+	}
 	sc.Rows = maxRow
-	fmt.Println("cells updated:", updated)
+	sc.Cols = maxCol
 }
 
 func (sc *SheetCache) populateBy(fetched map[string]cell.Cell) {
 	sc.Cells = make(map[string]cell.Cell)
-	// cell.UpdatedAt = time.Now()
 	maps.Copy(sc.Cells, fetched)
+	sc.LastSync = time.Now()
 }
 
 func parseGridData(sheet *sheets.Sheet) map[string]cell.Cell {
@@ -143,9 +155,16 @@ func (sc *SheetCache) SaveAs(path string) error {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	defer file.Close()
-	if err := os.WriteFile(path, data, 0666); err != nil {
-		return fmt.Errorf("failed to write data: %w", err)
+	if err := file.Truncate(0); err != nil {
+		return fmt.Errorf("failed to truncate file: %w", err)
 	}
+	if _, err := file.Write(data); err != nil {
+		return fmt.Errorf("failed to write data: %w", err)
+
+	}
+	// if err := os.WriteFile(path, data, 0666); err != nil {
+	// 	return fmt.Errorf("failed to write data: %w", err)
+	// }
 	return nil
 }
 

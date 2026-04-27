@@ -2,6 +2,7 @@ package cell
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,7 @@ func NewFromRowCol(row, col int) Cell {
 
 // NewFromA1 creates cell with a1 notation
 func NewFromA1(a1 string) (Cell, error) {
+	a1 = strings.ToUpper(a1)
 	row, col, err := A1ToPosition(a1)
 	if err != nil {
 		return Cell{}, fmt.Errorf("failed to convert a1 notation: %w", err)
@@ -58,7 +60,7 @@ func A1ToPosition(a1 string) (int, int, error) {
 	if a1 == "" {
 		return 0, 0, fmt.Errorf("empty A1 reference")
 	}
-
+	a1 = strings.ToUpper(a1)
 	letters := ""
 	digits := ""
 	for _, ch := range a1 {
@@ -98,7 +100,7 @@ func A1ToPosition(a1 string) (int, int, error) {
 // colToLetter converts 1-based column index to Excel-style A1 notation
 func colToLetter(n int) string {
 	if n <= 0 {
-		return "A"
+		return ""
 	}
 	letter := ""
 	for n > 0 {
@@ -132,6 +134,9 @@ func letterToColumn(letters string) (int, error) {
 }
 
 func (c Cell) Validate() error {
+	if c.A1 != strings.ToUpper(c.A1) {
+		return fmt.Errorf("cell name %q, must be in upper resgister", c.A1)
+	}
 	row, col, err := A1ToPosition(c.A1)
 	if err != nil {
 		return err
@@ -162,5 +167,5 @@ func Equal(c1, c2 Cell) bool {
 }
 
 func ColIndexToLetter(col int) string {
-	return colToLetter(col)
+	return colToLetter(col + 1)
 }
