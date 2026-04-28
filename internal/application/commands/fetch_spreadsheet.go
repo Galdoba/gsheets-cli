@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"gsheets-cli/internal/domain/sheet"
 	"gsheets-cli/internal/infrastructure/config"
-	"gsheets-cli/internal/infrastructure/storage"
+	"gsheets-cli/internal/infrastructure/persistence"
 
 	"github.com/urfave/cli/v3"
 	"google.golang.org/api/googleapi"
@@ -62,7 +62,7 @@ func fetchAction(cfg config.Config) cli.ActionFunc {
 		}
 
 		fmt.Println("loading storage...")
-		store, err := storage.New(title, tableName)
+		store, err := persistience.NewData(title, tableName)
 		if err != nil {
 			return fmt.Errorf("failed to initialize storage: %w", err)
 		}

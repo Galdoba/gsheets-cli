@@ -6,7 +6,7 @@ import (
 	"gsheets-cli/internal/domain/render"
 	"gsheets-cli/internal/domain/view"
 	"gsheets-cli/internal/infrastructure/config"
-	"gsheets-cli/internal/infrastructure/storage"
+	"gsheets-cli/internal/infrastructure/persistence"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -28,7 +28,7 @@ func readAction(cfg config.Config) cli.ActionFunc {
 			return fmt.Errorf("failed to collect spreadsheet data: %w", err)
 		}
 
-		dataStore, err := storage.NewData(parameters[dataSheetName], parameters[dataLastTableName])
+		dataStore, err := persistience.NewData(parameters[dataSheetName], parameters[dataLastTableName])
 		if err != nil {
 			return fmt.Errorf("failed to initialize storage: %w", err)
 		}
