@@ -28,10 +28,8 @@ func getService(ctx context.Context, credFile string) (*sheets.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read credential file: %w", err)
 	}
-	// cred := option.WithAuthCredentialsJSON(option.ImpersonatedServiceAccount, data)
 	srv, err := sheets.NewService(ctx,
-		// option.WithCredentialsFile(credFile),
-		option.WithAuthCredentialsJSON(option.ImpersonatedServiceAccount, data),
+		option.WithAuthCredentialsJSON(option.ServiceAccount, data),
 		option.WithScopes(sheets.SpreadsheetsScope),
 	)
 	if err != nil {

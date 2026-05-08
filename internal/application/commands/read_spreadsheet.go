@@ -3,10 +3,8 @@ package commands
 import (
 	"context"
 	"fmt"
-	"gsheets-cli/internal/domain/render"
-	"gsheets-cli/internal/domain/view"
 	"gsheets-cli/internal/infrastructure/config"
-	"gsheets-cli/internal/infrastructure/persistence"
+	persistience "gsheets-cli/internal/infrastructure/persistence"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -39,12 +37,9 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		if err == nil {
 			sc.UpdateDimentions()
 			fmt.Println("Using local cached data…")
-			preset := view.NewDefault(16)
-			canv := render.Render(sc, &preset)
-			fmt.Println("canvas 15:", canv.RowToString(15))
-			fmt.Println(canv.String())
-			return nil
 		}
+		row := sc.GetRow(5000)
+		fmt.Println(row)
 
 		return nil
 	}

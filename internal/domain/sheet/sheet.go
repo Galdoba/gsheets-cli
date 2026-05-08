@@ -210,3 +210,39 @@ func (sc *SheetCache) Delete(a1 string) error {
 func (sc *SheetCache) GetCell(row, col int) cell.Cell {
 	return sc.Cells[cell.PositionToA1(row, col)]
 }
+
+// GetRow return row of cells (0-based)
+func (sc *SheetCache) GetRow(i int) cell.Row {
+	if sc.Rows < i {
+		return cell.Row{}
+	}
+	if i < 0 {
+		return cell.Row{}
+	}
+	var row cell.Row
+	for col := 0; col <= sc.Cols; col++ {
+		pos := cell.PositionToA1(i, col)
+		if c, ok := sc.Cells[pos]; ok {
+			row.Cells = append(row.Cells, c)
+		}
+	}
+	return row
+}
+
+func (sc *SheetCache) GetCol(i int) cell.Column {
+	if sc.Cols < i {
+		return cell.Column{}
+	}
+	if i < 0 {
+		return cell.Column{}
+	}
+	var col cell.Column
+	for row := 0; row <= sc.Rows; row++ {
+		pos := cell.PositionToA1(row, i)
+		if c, ok := sc.Cells[pos]; ok {
+			col.Cells = append(col.Cells, c)
+		}
+	}
+	return col
+
+}

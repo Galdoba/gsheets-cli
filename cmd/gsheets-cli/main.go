@@ -25,6 +25,7 @@ func main() {
 		Commands: []*cli.Command{
 			commands.Read(inf.Config),
 			commands.Update(inf.Config),
+			commands.Fetch(inf.Config),
 		},
 		Flags: []cli.Flag{
 			&flags.GlobalCredentials,

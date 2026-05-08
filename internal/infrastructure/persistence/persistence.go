@@ -4,7 +4,6 @@ import (
 	"gsheets-cli/internal/application"
 	"gsheets-cli/internal/infrastructure/persistence/jsonstore"
 	"gsheets-cli/internal/infrastructure/persistence/presetstore"
-	"gsheets-cli/internal/infrastructure/persistence/session"
 
 	"gsheets-cli/internal/domain/sheet"
 	"gsheets-cli/internal/domain/view"
@@ -32,9 +31,9 @@ func NewPresentation(title, table, name string, columns int) (Presentation, erro
 	return ps, nil
 }
 
-func NewSession() (*session.Sesion, error) {
-	path := Path("active.json")
-}
+// func NewSession() (*session.Sesion, error) {
+// 	path := Path("active.json")
+// }
 
 func Path(name string, subdirs ...string) string {
 	options := []xdg.PathOption{}
