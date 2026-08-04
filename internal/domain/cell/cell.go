@@ -15,23 +15,6 @@ type Cell struct {
 	Note      string    `json:"note,omitempty"`
 	Format    string    `json:"format,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
-	Dirty     bool      `json:"-"`
-}
-
-type Row struct {
-	Cells []Cell
-}
-
-type Column struct {
-	Cells []Cell
-}
-
-func MaxWidth(cells ...Cell) int {
-	w := 0
-	for _, c := range cells {
-		w = max(w, len(strings.Split(c.Value, "")))
-	}
-	return w
 }
 
 // NewFromRowCol creates cell with 1-based row-col position

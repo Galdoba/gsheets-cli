@@ -1,5 +1,7 @@
 package view
 
+import "github.com/Galdoba/gsheets-cli/internal/domain/cell"
+
 type Preset struct {
 	Columns map[int]ColumnConfig `json:"columns"` // 0-based
 	Charset struct {
@@ -22,13 +24,17 @@ func NewDefault(columns int) Preset {
 	p.Columns = make(map[int]ColumnConfig, columns)
 	for i := range columns {
 		p.Columns[i] = ColumnConfig{
-			Index:        i,
-			NoteSfx:      false,
-			CutSfx:       false,
-			DirtySfx:     false,
-			ViewPosition: i,
-			Width:        0,
-			Source:       SourceValues,
+			Index:          i,
+			RenderPosition: i,
+			Letter:         cell.ColIndexToLetter(i),
+			Visibility:     ColVisible,
+			WidthMode:      WidthMax,
+			WidthValue:     0,
+			AlignRight:     false,
+			FormatHint:     "",
+			NoteHint:       "",
+			Frosen:         false,
+			GroupID:        "",
 		}
 
 	}

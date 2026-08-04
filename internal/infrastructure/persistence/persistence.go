@@ -1,14 +1,11 @@
 package persistience
 
 import (
-	"gsheets-cli/internal/application"
-	"gsheets-cli/internal/infrastructure/persistence/jsonstore"
-	"gsheets-cli/internal/infrastructure/persistence/presetstore"
-
-	"gsheets-cli/internal/domain/sheet"
-	"gsheets-cli/internal/domain/view"
-
 	"github.com/Galdoba/appcontext/xdg"
+	"github.com/Galdoba/gsheets-cli/internal/application"
+	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
+	"github.com/Galdoba/gsheets-cli/internal/domain/view"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence/jsonstore"
 )
 
 type Data interface {
@@ -26,10 +23,10 @@ type Presentation interface {
 	Save(*view.Preset) error
 }
 
-func NewPresentation(title, table, name string, columns int) (Presentation, error) {
-	ps := presetstore.New(title, table, name, columns)
-	return ps, nil
-}
+// func NewPresentation(title, table, name string, columns int) (Presentation, error) {
+// 	ps := presetstore.New(title, table, name, columns)
+// 	return ps, nil
+// }
 
 // func NewSession() (*session.Sesion, error) {
 // 	path := Path("active.json")

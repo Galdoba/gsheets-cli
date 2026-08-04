@@ -7,10 +7,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"gsheets-cli/internal/application"
-	"gsheets-cli/internal/domain/view"
-
 	"github.com/Galdoba/appcontext/xdg"
+	"github.com/Galdoba/gsheets-cli/internal/application"
+	"github.com/Galdoba/gsheets-cli/internal/domain/view"
 )
 
 type presetStore struct {

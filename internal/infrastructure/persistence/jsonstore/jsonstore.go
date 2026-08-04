@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gsheets-cli/internal/application"
-	"gsheets-cli/internal/domain/cell"
-	"gsheets-cli/internal/domain/sheet"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/Galdoba/appcontext/xdg"
+	"github.com/Galdoba/gsheets-cli/internal/application"
+	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
+	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
 )
 
 type jsonStore struct {

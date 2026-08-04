@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"gsheets-cli/internal/application"
-	"gsheets-cli/internal/application/commands"
-	"gsheets-cli/internal/application/flags"
-	"gsheets-cli/internal/infrastructure"
 	"log"
 	"os"
 
+	"github.com/Galdoba/gsheets-cli/internal/application"
+	"github.com/Galdoba/gsheets-cli/internal/application/commands"
+	"github.com/Galdoba/gsheets-cli/internal/application/flags"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure"
 	"github.com/urfave/cli/v3"
 )
 
@@ -25,7 +25,6 @@ func main() {
 		Commands: []*cli.Command{
 			commands.Read(inf.Config),
 			commands.Update(inf.Config),
-			commands.Fetch(inf.Config),
 		},
 		Flags: []cli.Flag{
 			&flags.GlobalCredentials,

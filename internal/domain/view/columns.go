@@ -1,58 +1,47 @@
 package view
 
-import (
-	"gsheets-cli/internal/domain/cell"
-	"gsheets-cli/internal/domain/sheet"
-	"slices"
-
-	"github.com/mattn/go-runewidth"
-)
+type WidthMode int
 
 const (
-	OverreachSfx = ".."
-	NoteSfx      = "^"
-	DirtyPrefix  = "*"
+	WidthUnset WidthMode = iota
+	WidthMin             //column width equal shortest non empty cell of the column
+	WidthMax             //column width equal longest cell in the column
+	WidthFixed           //column width is fixed. longer values are trimmed
 )
 
-type Alignment string
+// ColumnVisibility defines visibility of the column
+type ColumnVisibility int
 
-type Column struct {
-	Cells      []cell.Cell
-	Title      string
-	Code       string
-	MaxWidth   int
-	FixedWidth int
-	Index      int
-	Position   int
-}
+const (
+	VisibilityUnset   ColumnVisibility = iota
+	ColVisible                         //normal view
+	ColHidden                          //column is completely skipped: eg. |col1|col5|
+	ColCollapsedShort                  //hidden columns indicated with no marker: eg. |col1||col5|
+	ColCollapsedLong                   //marker is indicating hidden columns: eg. |col1|+3|col5|
+)
 
-func GetColumn(index int, cache *sheet.SheetCache, whitelist ...int) *Column {
-	c := Column{
-		Index:    index,
-		Position: index,
-	}
-	list := len(whitelist) > 0
-	col := cache.GetCol(index)
-	for i, cel := range col.Cells {
-		if i == 0 {
-			c.Title = cel.Value
-			c.Code = cell.ColIndexToLetter(index)
-		}
-		if list && !slices.Contains(whitelist, index) {
-			continue
-		}
+type NotePresentationMode int
 
-		c.MaxWidth = max(c.MaxWidth, runewidth.StringWidth(cel.Value))
-	}
-	return &c
-}
+const (
+	Unset   NotePresentationMode = iota
+	Hide                         //show no indication if Note is present
+	Mark                         //add marker if note is not empty: eg. |col1|col2*|col3|
+	Append                       //append note: eg. |col1|col2[note text]|col3|
+	Replace                      //replace cell value with note text: eg. |col1|[note text]|col3|
+)
 
-func (c *Column) WithWidth(w int) *Column {
-	c.FixedWidth = w
-	return c
-}
-
-func (c *Column) WithPosition(p int) *Column {
-	c.Position = p
-	return c
+// ColumnConfig explains to Renderer how to present column content
+type ColumnConfig struct {
+	Index          int              `json:"-"`
+	RenderPosition int              `json:"render_position"`
+	Letter         string           `json:"letter"`
+	Visibility     ColumnVisibility `json:"visibility"`
+	WidthMode      WidthMode        `json:"width_mode"`
+	WidthValue     int
+	AlignRight     bool   `json:"align_right"`
+	FormatHint     string `json:"format_hint"`
+	NoteHint       string `json:"note_hint"`
+	Frosen         bool   `json:"frosen"`
+	GroupID        string `json:"group_id"`
+	// computedWidth  int    `json:"-"`
 }

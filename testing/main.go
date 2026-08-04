@@ -2,58 +2,74 @@ package main
 
 import (
 	"fmt"
-	"gsheets-cli/internal/domain/cell"
-	"gsheets-cli/internal/domain/render"
-	"gsheets-cli/internal/domain/sheet"
-	"gsheets-cli/internal/domain/view"
+	"os"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
+	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
+	"github.com/Galdoba/gsheets-cli/internal/domain/view"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/tui"
 )
 
 func main() {
-	// 1. Создаём тестовые данные
-	data := &sheet.SheetCache{
-		SpreadsheetTitle: "Demo Sheet",
-		SheetName:        "Sheet1",
-		RevisionID:       "v1",
-		LastSync:         time.Now(),
-		Rows:             5,
-		Cols:             3,
-		Cells: map[string]cell.Cell{
-			"A1": {A1: "A1", Row: 0, Col: 0, Value: "Name"},
-			"B1": {A1: "B1", Row: 0, Col: 1, Value: "Age"},
-			"C1": {A1: "C1", Row: 0, Col: 2, Value: "City"},
-			"A2": {A1: "A2", Row: 1, Col: 0, Value: "Alice"},
-			"B2": {A1: "B2", Row: 1, Col: 1, Value: "30"},
-			"C2": {A1: "C2", Row: 1, Col: 2, Value: "New York"},
-			"A3": {A1: "A3", Row: 2, Col: 0, Value: "Bob"},
-			"B3": {A1: "B3", Row: 2, Col: 1, Value: "25"},
-			"C3": {A1: "C3", Row: 2, Col: 2, Value: "London"},
-		},
+	// 1. Initialize Mock Data
+	cache := sheet.New("Рабочая Таблица", "График работ 2.0")
+	fmt.Println(cache.SheetName, cache.SpreadsheetTitle)
+	for r, x := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11} {
+		for c, y := range []string{"A", "B", "C", "D", "E", "F", "G"} {
+			name := fmt.Sprintf("%s%d", y, x)
+			cache.Cells[name] = cell.Cell{
+				A1:        name,
+				Row:       r,
+				Col:       c,
+				Value:     fmt.Sprintf("cell %q data", name),
+				Note:      "",
+				Format:    "",
+				UpdatedAt: time.Now(),
+			}
+		}
+	}
+	// ... [Insert your mock data generation loop here] ...
+	cache.UpdateDimentions()
+
+	// 2. Initialize Domain View Configurations
+	preset := view.NewDefault(cache.ColCount())
+
+	// Let's manually tweak the preset to test the builder mapping
+	// Hide Column C (Index 2)
+	if col, ok := preset.Columns[2]; ok {
+		col.Visibility = view.ColHidden
+		preset.Columns[2] = col
 	}
 
-	// 2. Создаём пресет
-	preset := view.DefaultPreset()
-	preset.Columns = map[int]view.ColumnConfig{
-		// 0: {Visibility: view.ColVisible, WidthMode: view.WidthMax, AlignRight: false},
-		// 1: {Visibility: view.ColVisible, WidthMode: view.WidthFixed, WidthValue: 5, AlignRight: true},
-		// 2: {Visibility: view.ColVisible, WidthMode: view.WidthMax, AlignRight: false},
+	// Collapse Columns D and E (Indices 3 and 4)
+	if col, ok := preset.Columns[3]; ok {
+		col.Visibility = view.ColCollapsedLong
+		col.WidthMode = view.WidthFixed
+		col.WidthValue = 4
+		preset.Columns[3] = col
+	}
+	if col, ok := preset.Columns[4]; ok {
+		col.Visibility = view.ColCollapsedLong
+		col.WidthMode = view.WidthFixed
+		col.WidthValue = 4
+		preset.Columns[4] = col
 	}
 
-	// 3. Рендерим полный канвас
-	canvas := render.Render(data, &preset)
+	// Initialize Row Config (e.g., hiding row 5)
+	rowCfg := view.NewRowConfiguration()
+	rowCfg.States[4] = view.RowCollapsed // 0-based index 4 is Row 5
 
-	// 4. Сохраняем в файл
-	err := render.SaveToFile(canvas, "output.txt")
-	if err != nil {
-		fmt.Printf("Error saving file: %v\n", err)
-		return
+	// 3. Translate Domain -> Render using the Builder
+	renderCfg := view.BuildRenderConfig(cache, &preset, rowCfg)
+
+	// 4. Launch TUI
+	m := tui.NewModel(cache, renderCfg)
+	p := tea.NewProgram(m)
+
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error running TUI: %v\n", err)
+		os.Exit(1)
 	}
-
-	// 5. Для отладки: выводим в консоль
-	fmt.Println("=== Full Canvas ===")
-	fmt.Print(canvas.String())
-
-	// 6. Пример использования Viewport: выводим только первые 2 колонки, 3 строки
-	fmt.Println("\n=== Viewport (x=0, y=0, w=15, h=4) ===")
-	fmt.Print(canvas.Viewport(0, 0, 15, 4))
 }

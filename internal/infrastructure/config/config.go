@@ -7,7 +7,6 @@ import (
 type Config struct {
 	Credentials Credentials  `toml:"credentials"`
 	Sheets      Spreadsheets `toml:"sheets"`
-	Pull        Pull
 }
 
 type Credentials struct {
@@ -23,12 +22,6 @@ type Spreadsheets struct {
 type Table struct {
 	Address     string   `toml:"address"`
 	SheetsNames []string `toml:"sheets_names"`
-}
-
-type Pull struct {
-	Retry      bool `toml:"retry"`
-	RetryLimit int  `toml:"retry_limit"`
-	RetryAfter int  `toml:"retry_after"`
 }
 
 func Default() Config {
@@ -49,11 +42,6 @@ func Default() Config {
 					},
 				},
 			},
-		},
-		Pull: Pull{
-			Retry:      true,
-			RetryLimit: 0,
-			RetryAfter: 1,
 		},
 	}
 }

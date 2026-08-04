@@ -3,12 +3,13 @@ package sheet
 import (
 	"encoding/json"
 	"fmt"
-	"gsheets-cli/internal/domain/cell"
 	"maps"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
+	"github.com/Galdoba/gsheets-cli/internal/domain/render"
 	"google.golang.org/api/sheets/v4"
 )
 
@@ -211,38 +212,46 @@ func (sc *SheetCache) GetCell(row, col int) cell.Cell {
 	return sc.Cells[cell.PositionToA1(row, col)]
 }
 
-// GetRow return row of cells (0-based)
-func (sc *SheetCache) GetRow(i int) cell.Row {
-	if sc.Rows < i {
-		return cell.Row{}
-	}
-	if i < 0 {
-		return cell.Row{}
-	}
-	var row cell.Row
-	for col := 0; col <= sc.Cols; col++ {
-		pos := cell.PositionToA1(i, col)
-		if c, ok := sc.Cells[pos]; ok {
-			row.Cells = append(row.Cells, c)
-		}
-	}
-	return row
+// DataTable abstracts the local storage layer for the renderer
+// type DataTable interface {
+// 	RowCount() int
+// 	ColCount() int
+// 	CellValue(row, col int) string
+// 	ColName(col int) string // Returns "A", "B", "C", etc.
+// }
+
+// Compile-time assertion to ensure SheetCache implements render.DataTable
+var _ render.DataTable = (*SheetCache)(nil)
+
+// RowCount returns the total number of rows.
+func (sc *SheetCache) RowCount() int {
+	return sc.Rows
 }
 
-func (sc *SheetCache) GetCol(i int) cell.Column {
-	if sc.Cols < i {
-		return cell.Column{}
-	}
-	if i < 0 {
-		return cell.Column{}
-	}
-	var col cell.Column
-	for row := 0; row <= sc.Rows; row++ {
-		pos := cell.PositionToA1(row, i)
-		if c, ok := sc.Cells[pos]; ok {
-			col.Cells = append(col.Cells, c)
-		}
-	}
-	return col
+// ColCount returns the total number of columns.
+func (sc *SheetCache) ColCount() int {
+	return sc.Cols
+}
 
+// CellValue returns the string value of a cell.
+// Translates 0-based renderer coordinates to 1-based domain coordinates.
+func (sc *SheetCache) CellValue(row, col int) string {
+	// GetCell expects 1-based indexing
+	c := sc.GetCell(row+1, col+1)
+	return c.Value
+}
+
+// CellNote returns the string note of a cell.
+// Translates 0-based renderer coordinates to 1-based domain coordinates.
+func (sc *SheetCache) CellNote(row, col int) string {
+	// GetCell expects 1-based indexing
+	c := sc.GetCell(row+1, col+1)
+	return c.Note
+}
+
+// ColName returns the column letter (e.g., "A", "B", "AA").
+// Translates 0-based renderer column index to the expected format.
+func (sc *SheetCache) ColName(col int) string {
+	// cell.ColIndexToLetter expects a 0-based index and handles the +1 internally
+	return cell.ColIndexToLetter(col)
 }
