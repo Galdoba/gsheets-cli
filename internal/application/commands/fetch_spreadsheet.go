@@ -3,23 +3,24 @@ package commands
 import (
 	"context"
 	"fmt"
-	"gsheets-cli/internal/domain/sheet"
-	"gsheets-cli/internal/infrastructure/config"
-	"gsheets-cli/internal/infrastructure/persistence"
 
+	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
+	persistience "github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/api/googleapi"
 )
 
 func Fetch(cfg config.Config) *cli.Command {
 	return &cli.Command{
-		Name:    "read",
-		Aliases: []string{"r"},
-		Usage:   "Read spreadsheet data and save to a CSV file",
+		Name:    "fetch",
+		Aliases: []string{"f", "sync"},
+		Usage:   "Fetch remote spreadsheet data and save to local storage",
 		Flags:   []cli.Flag{},
 		Action:  fetchAction(cfg),
 	}
 }
+
 func fetchAction(cfg config.Config) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
 		parameters, err := getSpreadsheetData(cmd, cfg)
@@ -27,7 +28,7 @@ func fetchAction(cfg config.Config) cli.ActionFunc {
 			return fmt.Errorf("failed to collect spreadsheet data: %w", err)
 		}
 
-		fmt.Println("service created...")
+		fmt.Println("initializing service...")
 
 		srv, err := getService(ctx, parameters[dataCredFile])
 		if err != nil {
@@ -38,7 +39,7 @@ func fetchAction(cfg config.Config) cli.ActionFunc {
 		actualID := extractSheetID(parameters[dataSheetID])
 		tableName := parameters[dataSheetName]
 
-		fmt.Println("reading...")
+		fmt.Println("reading remote data...")
 
 		resp, err := srv.Spreadsheets.Get(actualID).
 			Ranges(tableName).
@@ -48,13 +49,12 @@ func fetchAction(cfg config.Config) cli.ActionFunc {
 		if err != nil {
 			return fmt.Errorf("failed to read spreadsheet: %w", err)
 		}
-		title := "spreadsheet"
-		if resp.Properties != nil {
-			title = resp.Properties.Title
-		}
-		fmt.Println("updating...")
 
-		fetched := sheet.New(title, tableName)
+		// We use the actualID as the storage title to guarantee consistency
+		// between fetch and read commands, avoiding mismatched Google Sheet titles.
+		fmt.Println("updating local cache...")
+
+		fetched := sheet.New(actualID, tableName)
 		if len(resp.Sheets) > 0 {
 			fetched.UpdateGridData(resp.Sheets[0])
 		} else {
@@ -62,7 +62,7 @@ func fetchAction(cfg config.Config) cli.ActionFunc {
 		}
 
 		fmt.Println("loading storage...")
-		store, err := persistience.NewData(title, tableName)
+		store, err := persistience.NewData(actualID, tableName)
 		if err != nil {
 			return fmt.Errorf("failed to initialize storage: %w", err)
 		}

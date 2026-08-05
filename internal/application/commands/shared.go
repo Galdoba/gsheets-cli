@@ -3,11 +3,11 @@ package commands
 import (
 	"context"
 	"fmt"
-	"gsheets-cli/internal/application/flags"
-	"gsheets-cli/internal/infrastructure/config"
 	"os"
 	"strings"
 
+	"github.com/Galdoba/gsheets-cli/internal/application/flags"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"

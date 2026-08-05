@@ -3,11 +3,11 @@ package commands
 import (
 	"context"
 	"fmt"
-	"gsheets-cli/internal/infrastructure/config"
 	"strings"
 
 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
 	"github.com/Galdoba/gsheets-cli/internal/domain/view"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
 	persistience "github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence"
 	"github.com/urfave/cli/v3"
 )
@@ -16,7 +16,7 @@ func Read(cfg config.Config) *cli.Command {
 	return &cli.Command{
 		Name:    "read",
 		Aliases: []string{"r"},
-		Usage:   "Read spreadsheet data and save to a CSV file",
+		Usage:   "Read locally cached spreadsheet data and print to terminal",
 		Action:  readAction(cfg),
 	}
 }
@@ -28,23 +28,38 @@ func readAction(cfg config.Config) cli.ActionFunc {
 			return fmt.Errorf("failed to collect spreadsheet data: %w", err)
 		}
 
-		dataStore, err := persistience.NewData(parameters[dataSheetName], parameters[dataLastTableName])
+		// Use the extracted Sheet ID to guarantee consistency with fetchAction
+		spreadsheetID := extractSheetID(parameters[dataSheetID])
+		tableName := parameters[dataSheetName]
+
+		dataStore, err := persistience.NewData(spreadsheetID, tableName)
 		if err != nil {
 			return fmt.Errorf("failed to initialize storage: %w", err)
 		}
+
 		sc, err := dataStore.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load data: %w", err)
 		}
-		if err == nil {
-			sc.UpdateDimentions()
-			fmt.Println("Using local cached data…")
-			preset := view.NewDefault(16)
-			canv := render.Render(sc, &preset)
-			fmt.Println("canvas 15:", canv.RowToString(15))
-			fmt.Println(canv.String())
+
+		// If no data has been fetched yet, the cache will be empty
+		if sc.RowCount() == 0 {
+			fmt.Println("⚠️  No local data found. Please run the 'fetch' command first.")
 			return nil
 		}
+
+		sc.UpdateDimentions()
+		fmt.Println("Using local cached data…")
+
+		// 1. Build the domain preset
+		preset := view.NewDefault(sc.ColCount())
+
+		// 2. Translate Domain -> Render using the Builder
+		renderCfg := view.BuildRenderConfig(sc, &preset, nil)
+
+		// 3. Render all rows for CLI output (viewportStart=0, viewportHeight=RowCount)
+		output := render.Render(sc, renderCfg, 0, sc.RowCount())
+		fmt.Print(output)
 
 		return nil
 	}

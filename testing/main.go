@@ -3,68 +3,56 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
-	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
 	"github.com/Galdoba/gsheets-cli/internal/domain/view"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence/jsonstore"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence/presetstore"
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/tui"
 )
 
 func main() {
-	// 1. Initialize Mock Data
-	cache := sheet.New("Рабочая Таблица", "График работ 2.0")
-	fmt.Println(cache.SheetName, cache.SpreadsheetTitle)
-	for r, x := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11} {
-		for c, y := range []string{"A", "B", "C", "D", "E", "F", "G"} {
-			name := fmt.Sprintf("%s%d", y, x)
-			cache.Cells[name] = cell.Cell{
-				A1:        name,
-				Row:       r,
-				Col:       c,
-				Value:     fmt.Sprintf("cell %q data", name),
-				Note:      "",
-				Format:    "",
-				UpdatedAt: time.Now(),
-			}
-		}
+	spreadsheetTitle := "1Waa58usrgEal2Da6tyayaowiWujpm0rzd06P5ASYlsg"
+	tableName := "График работ 2.0"
+
+	// 1. Load Data from Local Storage
+	dataStore, err := jsonstore.New(spreadsheetTitle, tableName)
+	if err != nil {
+		fmt.Printf("Failed to init storage: %v\n", err)
+		os.Exit(1)
 	}
-	// ... [Insert your mock data generation loop here] ...
+
+	cache, err := dataStore.Load()
+	if err != nil {
+		fmt.Printf("Failed to load data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Ensure dimensions are calculated if loading from an older JSON file
 	cache.UpdateDimentions()
 
-	// 2. Initialize Domain View Configurations
-	preset := view.NewDefault(cache.ColCount())
+	fmt.Println("loaded", len(cache.Cells))
+	// panic(0)
 
-	// Let's manually tweak the preset to test the builder mapping
-	// Hide Column C (Index 2)
-	if col, ok := preset.Columns[2]; ok {
-		col.Visibility = view.ColHidden
-		preset.Columns[2] = col
+	// 2. Load User Preset (Presentation Layer)
+	// We initialize the preset store. If no preset exists on disk, it defaults to NewDefault.
+	pStore := presetstore.New(spreadsheetTitle, tableName, "Default", cache.ColCount())
+	preset, err := pStore.Load()
+
+	// If loading fails (e.g., file doesn't exist yet), fallback to a default preset
+	if err != nil {
+		defaultPreset := view.NewDefault(cache.ColCount())
+		preset = &defaultPreset
 	}
 
-	// Collapse Columns D and E (Indices 3 and 4)
-	if col, ok := preset.Columns[3]; ok {
-		col.Visibility = view.ColCollapsedLong
-		col.WidthMode = view.WidthFixed
-		col.WidthValue = 4
-		preset.Columns[3] = col
-	}
-	if col, ok := preset.Columns[4]; ok {
-		col.Visibility = view.ColCollapsedLong
-		col.WidthMode = view.WidthFixed
-		col.WidthValue = 4
-		preset.Columns[4] = col
-	}
+	// 3. Load Row Configuration (Optional, for now we pass nil to show all rows)
+	// In the future, this will also be loaded from your persistence layer.
+	var rowCfg *view.RowConfig
 
-	// Initialize Row Config (e.g., hiding row 5)
-	rowCfg := view.NewRowConfiguration()
-	rowCfg.States[4] = view.RowCollapsed // 0-based index 4 is Row 5
+	// 4. Translate Domain -> Render
+	renderCfg := view.BuildRenderConfig(cache, preset, rowCfg)
 
-	// 3. Translate Domain -> Render using the Builder
-	renderCfg := view.BuildRenderConfig(cache, &preset, rowCfg)
-
-	// 4. Launch TUI
+	// 5. Launch TUI
 	m := tui.NewModel(cache, renderCfg)
 	p := tea.NewProgram(m)
 
