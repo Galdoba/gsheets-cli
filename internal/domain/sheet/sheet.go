@@ -255,3 +255,18 @@ func (sc *SheetCache) ColName(col int) string {
 	// cell.ColIndexToLetter expects a 0-based index and handles the +1 internally
 	return cell.ColIndexToLetter(col)
 }
+
+func (sc *SheetCache) RowCells(row int) []cell.Cell {
+	domainRow := row + 1
+
+	cells := make([]cell.Cell, sc.Cols)
+	for col := 1; col <= sc.Cols; col++ {
+		a1 := cell.PositionToA1(domainRow, col)
+		if c, ok := sc.Cells[a1]; ok {
+			cells[col-1] = c
+		} else {
+			cells[col-1] = cell.Cell{A1: a1, Row: row, Col: col}
+		}
+	}
+	return cells
+}
