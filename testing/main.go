@@ -75,6 +75,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Println(dataStore.Load())
+
 	cache, err := dataStore.Load()
 	if err != nil {
 		fmt.Printf("Failed to load data: %v\n", err)
@@ -83,7 +85,9 @@ func main() {
 
 	// Ensure dimensions are calculated if loading from an older JSON file
 	cache.UpdateDimentions()
+	fmt.Println(len(cache.Grid), "rows")
 
+	panic(0)
 	// 2. Define a Domain Profile
 	// This struct represents what would normally be loaded from a JSON file on disk.
 	p := profile.Profile{

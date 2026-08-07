@@ -10,7 +10,6 @@ import (
 
 	"github.com/Galdoba/appcontext/xdg"
 	"github.com/Galdoba/gsheets-cli/internal/application"
-	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
 	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
 )
 
@@ -63,31 +62,31 @@ func (js *jsonStore) Load() (*sheet.SheetCache, error) {
 	return js.data, nil
 }
 
-func (js *jsonStore) Merge(fetched *sheet.SheetCache) error {
-	js.mu.Lock()
-	defer js.mu.Unlock()
+// func (js *jsonStore) Merge(fetched *sheet.SheetCache) error {
+// 	js.mu.Lock()
+// 	defer js.mu.Unlock()
 
-	for a1, newCell := range fetched.Cells {
-		oldCell, exists := js.data.Cells[a1]
-		if !exists {
-			newCell.UpdatedAt = fetched.LastSync
-			js.data.Cells[a1] = newCell
-			continue
-		}
-		if cell.Equal(oldCell, newCell) {
-			continue
-		}
-		newCell.UpdatedAt = fetched.LastSync
-		js.data.Cells[a1] = newCell
-	}
+// 	for a1, newCell := range fetched.Cells {
+// 		oldCell, exists := js.data.Cells[a1]
+// 		if !exists {
+// 			newCell.UpdatedAt = fetched.LastSync
+// 			js.data.Cells[a1] = newCell
+// 			continue
+// 		}
+// 		if cell.Equal(oldCell, newCell) {
+// 			continue
+// 		}
+// 		newCell.UpdatedAt = fetched.LastSync
+// 		js.data.Cells[a1] = newCell
+// 	}
 
-	if fetched.RevisionID != "" {
-		js.data.RevisionID = fetched.RevisionID
-	}
-	js.data.LastSync = fetched.LastSync
+// 	if fetched.RevisionID != "" {
+// 		js.data.RevisionID = fetched.RevisionID
+// 	}
+// 	js.data.LastSync = fetched.LastSync
 
-	return nil
-}
+// 	return nil
+// }
 
 func (js *jsonStore) Save() error {
 	js.mu.Lock()

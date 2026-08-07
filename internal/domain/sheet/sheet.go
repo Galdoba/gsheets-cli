@@ -3,7 +3,6 @@ package sheet
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,130 +12,204 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
+// SheetCache holds a local snapshot of a Google Sheet.
+// Grid is a dense 2‑D slice of cells indexed by [row][col] (0‑based).
+// An absent cell is represented by the zero value of cell.Cell (Row == 0).
 type SheetCache struct {
-	SpreadsheetTitle string `json:"spreadsheet_title"`
-	// SheetID          string               `json:"sheet_id"`
-	SheetName  string               `json:"sheet_name"`
-	RevisionID string               `json:"revision_id"`
-	LastSync   time.Time            `json:"last_sync"`
-	Rows       int                  `json:"rows"`
-	Cols       int                  `json:"cols"`
-	Cells      map[string]cell.Cell `json:"cells"`
+	SpreadsheetTitle string        `json:"spreadsheet_title"`
+	SheetName        string        `json:"sheet_name"`
+	RevisionID       string        `json:"revision_id"`
+	LastSync         time.Time     `json:"last_sync"`
+	Rows             int           `json:"rows"`
+	Cols             int           `json:"cols"`
+	Grid             [][]cell.Cell `json:"grid"`
 }
 
+// New creates an empty cache with no grid data.
 func New(title, name string) *SheetCache {
-	sc := SheetCache{
+	return &SheetCache{
 		SpreadsheetTitle: title,
-		// SheetID:          id,
-		SheetName: name,
-		Cells:     make(map[string]cell.Cell),
+		SheetName:        name,
+		Grid:             [][]cell.Cell{},
 	}
-	return &sc
 }
 
+// UpdateGridData fully replaces the local cache with the latest remote sheet.
+// This matches your “always pull fresh before push” workflow.
 func (sc *SheetCache) UpdateGridData(sheet *sheets.Sheet) {
-	fetched := parseGridData(sheet)
-	switch len(fetched) < len(sc.Cells) {
-	case false:
-		sc.updateBy(fetched)
-	case true:
-		sc.populateBy(fetched)
-	}
+	sc.Grid = parseGridData(sheet)
+	sc.LastSync = time.Now()
 	sc.UpdateDimentions()
 }
 
-func (sc *SheetCache) updateBy(fetched map[string]cell.Cell) {
-	updated := 0
-	for position, newCell := range fetched {
-		oldCell := sc.Cells[position]
-		if cell.Equal(oldCell, newCell) {
-			continue
-		}
-		newCell.UpdatedAt = time.Now()
-
-		sc.Cells[position] = newCell
-		updated++
-	}
-	if updated > 0 {
-		sc.LastSync = time.Now()
-	}
-}
-
+// UpdateDimentions recalculates Rows and Cols from the current grid.
 func (sc *SheetCache) UpdateDimentions() {
-	maxRow := 0
-	maxCol := 0
-	for _, c := range sc.Cells {
-		maxRow = max(maxRow, c.Row)
-		maxCol = max(maxCol, c.Col)
+	if len(sc.Grid) == 0 {
+		sc.Rows = 0
+		sc.Cols = 0
+		return
 	}
-	sc.Rows = maxRow
-	sc.Cols = maxCol
+	sc.Rows = len(sc.Grid)
+	if sc.Rows > 0 {
+		sc.Cols = len(sc.Grid[0])
+	}
 }
 
-func (sc *SheetCache) populateBy(fetched map[string]cell.Cell) {
-	sc.Cells = make(map[string]cell.Cell)
-	maps.Copy(sc.Cells, fetched)
-	sc.LastSync = time.Now()
+// ---------------------------------------------------------------------------
+// Public CRUD (kept for programmatic local manipulation)
+// ---------------------------------------------------------------------------
+
+// CreateCell adds a new cell to the cache. Returns an error if the position
+// is already occupied by a non‑absent cell.
+// func (sc *SheetCache) CreateCell(c cell.Cell) error {
+// 	if err := c.Validate(); err != nil {
+// 		return fmt.Errorf("can't create invalid cell: %w", err)
+// 	}
+// 	rowIdx, colIdx := c.Row-1, c.Col-1
+// 	if rowIdx < 0 || colIdx < 0 {
+// 		return fmt.Errorf("invalid cell position")
+// 	}
+// 	// Expand grid if needed
+// 	sc.ensureGridSize(c.Row, c.Col)
+// 	if sc.Grid[rowIdx][colIdx].Row != 0 {
+// 		return fmt.Errorf("cell %q already exists", c.A1)
+// 	}
+// 	sc.Grid[rowIdx][colIdx] = c
+// 	sc.UpdateDimentions()
+// 	return nil
+// }
+
+// ReadCell returns the cell at A1 notation and true if it exists.
+// func (sc *SheetCache) ReadCell(a1 string) (cell.Cell, bool) {
+// 	row, col, err := cell.A1ToPosition(a1)
+// 	if err != nil {
+// 		return cell.Cell{}, false
+// 	}
+// 	rowIdx, colIdx := row-1, col-1
+// 	if rowIdx < len(sc.Grid) && colIdx < len(sc.Grid[rowIdx]) {
+// 		c := sc.Grid[rowIdx][colIdx]
+// 		if c.Row != 0 {
+// 			return c, true
+// 		}
+// 	}
+// 	return cell.Cell{}, false
+// }
+
+// UpdateCell modifies an existing cell. Returns an error if the cell does not
+// exist at that position.
+// func (sc *SheetCache) UpdateCell(c cell.Cell) error {
+// 	if err := c.Validate(); err != nil {
+// 		return fmt.Errorf("cell invalid: %w", err)
+// 	}
+// 	rowIdx, colIdx := c.Row-1, c.Col-1
+// 	if rowIdx < 0 || colIdx < 0 {
+// 		return fmt.Errorf("invalid cell position")
+// 	}
+// 	if rowIdx >= len(sc.Grid) || colIdx >= len(sc.Grid[rowIdx]) {
+// 		return fmt.Errorf("cell %q does not exist", c.A1)
+// 	}
+// 	if sc.Grid[rowIdx][colIdx].Row == 0 {
+// 		return fmt.Errorf("cell %q does not exist", c.A1)
+// 	}
+// 	sc.Grid[rowIdx][colIdx] = c
+// 	return nil
+// }
+
+// // Delete removes a cell from the cache. After deletion the position is
+// // considered empty. Returns an error if the cell was not present.
+// func (sc *SheetCache) Delete(a1 string) error {
+// 	row, col, err := cell.A1ToPosition(a1)
+// 	if err != nil {
+// 		return fmt.Errorf("cell %q does not exist", a1)
+// 	}
+// 	rowIdx, colIdx := row-1, col-1
+// 	if rowIdx >= len(sc.Grid) || colIdx >= len(sc.Grid[rowIdx]) {
+// 		return fmt.Errorf("cell %q does not exist", a1)
+// 	}
+// 	if sc.Grid[rowIdx][colIdx].Row == 0 {
+// 		return fmt.Errorf("cell %q does not exist", a1)
+// 	}
+// 	sc.Grid[rowIdx][colIdx] = cell.Cell{} // mark as absent
+// 	return nil
+// }
+
+// GetCell returns the cell at the given 1‑based row and column.
+func (sc *SheetCache) GetCell(row, col int) cell.Cell {
+	rowIdx, colIdx := row-1, col-1
+	if rowIdx >= 0 && rowIdx < len(sc.Grid) && colIdx >= 0 && colIdx < len(sc.Grid[rowIdx]) {
+		return sc.Grid[rowIdx][colIdx]
+	}
+	return cell.Cell{}
 }
 
-func parseGridData(sheet *sheets.Sheet) map[string]cell.Cell {
-	cellMap := make(map[string]cell.Cell)
-	for _, grid := range sheet.Data {
-		startRow := grid.StartRow    // 0-based API index
-		startCol := grid.StartColumn // 0-based API index
+// ---------------------------------------------------------------------------
+// Render support (render.DataTable)
+// ---------------------------------------------------------------------------
 
-		for rowIdx, row := range grid.RowData {
-			for colIdx, cellData := range row.Values {
-				absRow := int(startRow) + rowIdx + 1 // Convert to 1-based
-				absCol := int(startCol) + colIdx + 1
+var _ render.DataTable = (*SheetCache)(nil)
 
-				cell := cell.Cell{
-					A1:     fmt.Sprintf("%s", cell.PositionToA1(absRow, absCol)),
-					Row:    absRow,
-					Col:    absCol,
-					Value:  extractValue(cellData),
-					Note:   extractNote(cellData),
-					Format: extractFormat(cellData),
+func (sc *SheetCache) RowCount() int { return sc.Rows }
+func (sc *SheetCache) ColCount() int { return sc.Cols }
+
+func (sc *SheetCache) CellValue(row, col int) string {
+	return sc.GetCell(row+1, col+1).Value
+}
+
+func (sc *SheetCache) CellNote(row, col int) string {
+	return sc.GetCell(row+1, col+1).Note
+}
+
+func (sc *SheetCache) ColName(col int) string {
+	return cell.ColIndexToLetter(col)
+}
+
+// RowCells returns all cells in the given 0‑based row.
+func (sc *SheetCache) RowCells(row int) []cell.Cell {
+	domainRow := row + 1
+	cells := make([]cell.Cell, sc.Cols)
+	if row < len(sc.Grid) {
+		for colIdx := 0; colIdx < sc.Cols; colIdx++ {
+			if colIdx < len(sc.Grid[row]) {
+				cells[colIdx] = sc.Grid[row][colIdx]
+			} else {
+				cells[colIdx] = cell.Cell{
+					A1:  cell.PositionToA1(domainRow, colIdx+1),
+					Row: domainRow,
+					Col: colIdx + 1,
 				}
-				cellMap[cell.A1] = cell
+			}
+		}
+	} else {
+		for colIdx := 0; colIdx < sc.Cols; colIdx++ {
+			cells[colIdx] = cell.Cell{
+				A1:  cell.PositionToA1(domainRow, colIdx+1),
+				Row: domainRow,
+				Col: colIdx + 1,
 			}
 		}
 	}
-	return cellMap
+	return cells
 }
 
-// extractValue: prefer formatted (display) value, fallback to raw
-func extractValue(cell *sheets.CellData) string {
-	if cell.FormattedValue != "" {
-		return cell.FormattedValue
+func (sc *SheetCache) Column(col int) []cell.Cell {
+	if len(sc.Grid) <= 0 || col < 0 {
+		return []cell.Cell{}
 	}
-	if cell.UserEnteredValue != nil {
-		if cell.UserEnteredValue.StringValue != nil {
-			return *cell.UserEnteredValue.StringValue
+	column := make([]cell.Cell, len(sc.Grid[0]))
+	for _, row := range sc.Grid {
+		for c, cell := range row {
+			if c != col {
+				continue
+			}
+			column = append(column, cell)
 		}
-		// Handle other types: number, bool, formula, error
-		return fmt.Sprintf("%v", cell.UserEnteredValue)
 	}
-	return ""
+	return column
 }
 
-// extractNote: yellow sticky note
-func extractNote(cell *sheets.CellData) string {
-	if cell.Note != "" {
-		return cell.Note
-	}
-	return ""
-}
-
-// extractFormat: number format type (CURRENCY, DATE, TEXT, etc.)
-func extractFormat(cell *sheets.CellData) string {
-	if cell.EffectiveFormat != nil &&
-		cell.EffectiveFormat.NumberFormat != nil &&
-		cell.EffectiveFormat.NumberFormat.Type != "" {
-		return cell.EffectiveFormat.NumberFormat.Type
-	}
-	return ""
-}
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
 
 func (sc *SheetCache) SaveAs(path string) error {
 	data, err := json.MarshalIndent(sc, "", "  ")
@@ -161,112 +234,106 @@ func (sc *SheetCache) SaveAs(path string) error {
 	}
 	if _, err := file.Write(data); err != nil {
 		return fmt.Errorf("failed to write data: %w", err)
-
 	}
-	// if err := os.WriteFile(path, data, 0666); err != nil {
-	// 	return fmt.Errorf("failed to write data: %w", err)
-	// }
 	return nil
 }
 
-func (sc *SheetCache) CreateCell(c cell.Cell) error {
-	if _, ok := sc.Cells[c.A1]; ok {
-		return fmt.Errorf("cell %q already exists", c.A1)
+// ---------------------------------------------------------------------------
+// Google Sheets API helpers
+// ---------------------------------------------------------------------------
+
+// parseGridData builds a dense 2‑D grid from a *sheets.Sheet.
+// It uses GridProperties to allocate the correct dimensions and fills in
+// only the cells returned by the API. All absent cells remain zero values.
+func parseGridData(sheet *sheets.Sheet) [][]cell.Cell {
+	rows := int(sheet.Properties.GridProperties.RowCount)
+	cols := int(sheet.Properties.GridProperties.ColumnCount)
+	if rows == 0 || cols == 0 {
+		return [][]cell.Cell{}
 	}
-	if err := c.Validate(); err != nil {
-		return fmt.Errorf("can't create invalid cell: %w", err)
+
+	grid := make([][]cell.Cell, rows)
+	for i := range grid {
+		grid[i] = make([]cell.Cell, cols)
 	}
-	c.UpdatedAt = time.Now()
-	sc.Cells[c.A1] = c
-	return nil
-}
 
-func (sc *SheetCache) ReadCell(a1 string) (cell.Cell, bool) {
-	if c, ok := sc.Cells[a1]; ok {
-		return c, ok
-	}
-	return cell.Cell{}, false
-}
-
-func (sc *SheetCache) UpdateCell(c cell.Cell) error {
-	if _, ok := sc.Cells[c.A1]; !ok {
-		return fmt.Errorf("cell %q does not exist", c.A1)
-	}
-	if err := c.Validate(); err != nil {
-		return fmt.Errorf("cell invalid: %w", err)
-	}
-	c.UpdatedAt = time.Now()
-	sc.Cells[c.A1] = c
-	return nil
-}
-
-func (sc *SheetCache) Delete(a1 string) error {
-	if _, ok := sc.Cells[a1]; !ok {
-		return fmt.Errorf("cell %q does not exist", a1)
-	}
-	delete(sc.Cells, a1)
-	return nil
-}
-
-func (sc *SheetCache) GetCell(row, col int) cell.Cell {
-	return sc.Cells[cell.PositionToA1(row, col)]
-}
-
-// DataTable abstracts the local storage layer for the renderer
-// type DataTable interface {
-// 	RowCount() int
-// 	ColCount() int
-// 	CellValue(row, col int) string
-// 	ColName(col int) string // Returns "A", "B", "C", etc.
-// }
-
-// Compile-time assertion to ensure SheetCache implements render.DataTable
-var _ render.DataTable = (*SheetCache)(nil)
-
-// RowCount returns the total number of rows.
-func (sc *SheetCache) RowCount() int {
-	return sc.Rows
-}
-
-// ColCount returns the total number of columns.
-func (sc *SheetCache) ColCount() int {
-	return sc.Cols
-}
-
-// CellValue returns the string value of a cell.
-// Translates 0-based renderer coordinates to 1-based domain coordinates.
-func (sc *SheetCache) CellValue(row, col int) string {
-	// GetCell expects 1-based indexing
-	c := sc.GetCell(row+1, col+1)
-	return c.Value
-}
-
-// CellNote returns the string note of a cell.
-// Translates 0-based renderer coordinates to 1-based domain coordinates.
-func (sc *SheetCache) CellNote(row, col int) string {
-	// GetCell expects 1-based indexing
-	c := sc.GetCell(row+1, col+1)
-	return c.Note
-}
-
-// ColName returns the column letter (e.g., "A", "B", "AA").
-// Translates 0-based renderer column index to the expected format.
-func (sc *SheetCache) ColName(col int) string {
-	// cell.ColIndexToLetter expects a 0-based index and handles the +1 internally
-	return cell.ColIndexToLetter(col)
-}
-
-func (sc *SheetCache) RowCells(row int) []cell.Cell {
-	domainRow := row + 1
-
-	cells := make([]cell.Cell, sc.Cols)
-	for col := 1; col <= sc.Cols; col++ {
-		a1 := cell.PositionToA1(domainRow, col)
-		if c, ok := sc.Cells[a1]; ok {
-			cells[col-1] = c
-		} else {
-			cells[col-1] = cell.Cell{A1: a1, Row: row, Col: col}
+	for _, data := range sheet.Data {
+		startRow := int(data.StartRow)
+		startCol := int(data.StartColumn)
+		for rowIdx, row := range data.RowData {
+			absRow := startRow + rowIdx + 1
+			if absRow > rows {
+				continue
+			}
+			for colIdx, cellData := range row.Values {
+				absCol := startCol + colIdx + 1
+				if absCol > cols {
+					continue
+				}
+				grid[absRow-1][absCol-1] = cell.Cell{
+					A1:     cell.PositionToA1(absRow, absCol),
+					Row:    absRow,
+					Col:    absCol,
+					Value:  extractValue(cellData),
+					Note:   extractNote(cellData),
+					Format: extractFormat(cellData),
+				}
+			}
 		}
 	}
-	return cells
+	return grid
 }
+
+// extractValue prefers the formatted display value, falls back to raw.
+func extractValue(cell *sheets.CellData) string {
+	if cell.FormattedValue != "" {
+		return cell.FormattedValue
+	}
+	if cell.UserEnteredValue != nil {
+		if cell.UserEnteredValue.StringValue != nil {
+			return *cell.UserEnteredValue.StringValue
+		}
+		return fmt.Sprintf("%v", cell.UserEnteredValue)
+	}
+	return ""
+}
+
+func extractNote(cell *sheets.CellData) string {
+	if cell.Note != "" {
+		return cell.Note
+	}
+	return ""
+}
+
+func extractFormat(cell *sheets.CellData) string {
+	if cell.EffectiveFormat != nil &&
+		cell.EffectiveFormat.NumberFormat != nil &&
+		cell.EffectiveFormat.NumberFormat.Type != "" {
+		return cell.EffectiveFormat.NumberFormat.Type
+	}
+	return ""
+}
+
+// ---------------------------------------------------------------------------
+// A1 notation helpers (internal)
+// ---------------------------------------------------------------------------
+
+// ensureGridSize is a tiny helper used only by CreateCell to grow the grid
+// when a cell is added beyond the current bounds.
+// func (sc *SheetCache) ensureGridSize(row, col int) {
+// 	// Expand columns in all existing rows if necessary
+// 	for len(sc.Grid[0]) < col {
+// 		for i := range sc.Grid {
+// 			sc.Grid[i] = append(sc.Grid[i], cell.Cell{})
+// 		}
+// 	}
+// 	// Add missing rows
+// 	for len(sc.Grid) < row {
+// 		newRow := make([]cell.Cell, max(col, sc.Cols))
+// 		sc.Grid = append(sc.Grid, newRow)
+// 	}
+// 	// Keep Columns consistent
+// 	if sc.Cols < col {
+// 		sc.Cols = col
+// 	}
+// }

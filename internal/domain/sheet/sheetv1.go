@@ -1,0 +1,272 @@
+package sheet
+
+// import (
+// 	"encoding/json"
+// 	"fmt"
+// 	"maps"
+// 	"os"
+// 	"path/filepath"
+// 	"time"
+
+// 	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
+// 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
+// 	"google.golang.org/api/sheets/v4"
+// )
+
+// type SheetCache struct {
+// 	SpreadsheetTitle string               `json:"spreadsheet_title"`
+// 	SheetName        string               `json:"sheet_name"`
+// 	RevisionID       string               `json:"revision_id"`
+// 	LastSync         time.Time            `json:"last_sync"`
+// 	Rows             int                  `json:"rows"`
+// 	Cols             int                  `json:"cols"`
+// 	Cells            map[string]cell.Cell `json:"cells"` //TODO: deprecated: this field must be removed
+// 	Grid             [][]cell.Cell        `json:"grid"`  //TODO: this field must fully replace "Cells" field
+// }
+
+// func New(title, name string) *SheetCache {
+// 	sc := SheetCache{
+// 		SpreadsheetTitle: title,
+// 		// SheetID:          id,
+// 		SheetName: name,
+// 		Cells:     make(map[string]cell.Cell),
+// 	}
+// 	return &sc
+// }
+
+// func (sc *SheetCache) UpdateGridData(sheet *sheets.Sheet) {
+// 	fetched := parseGridData(sheet)
+// 	switch len(fetched) < len(sc.Cells) {
+// 	case false:
+// 		sc.updateBy(fetched)
+// 	case true:
+// 		sc.populateBy(fetched)
+// 	}
+// 	sc.UpdateDimentions()
+// }
+
+// func (sc *SheetCache) updateBy(fetched map[string]cell.Cell) {
+// 	updated := 0
+// 	for position, newCell := range fetched {
+// 		oldCell := sc.Cells[position]
+// 		if cell.Equal(oldCell, newCell) {
+// 			continue
+// 		}
+// 		newCell.UpdatedAt = time.Now()
+
+// 		sc.Cells[position] = newCell
+// 		updated++
+// 	}
+// 	if updated > 0 {
+// 		sc.LastSync = time.Now()
+// 	}
+// }
+
+// func (sc *SheetCache) UpdateDimentions() {
+// 	maxRow := 0
+// 	maxCol := 0
+// 	for _, c := range sc.Cells {
+// 		maxRow = max(maxRow, c.Row)
+// 		maxCol = max(maxCol, c.Col)
+// 	}
+// 	sc.Rows = maxRow
+// 	sc.Cols = maxCol
+// }
+
+// func (sc *SheetCache) populateBy(fetched map[string]cell.Cell) {
+// 	sc.Cells = make(map[string]cell.Cell)
+// 	maps.Copy(sc.Cells, fetched)
+// 	sc.LastSync = time.Now()
+// }
+
+// func parseGridData(sheet *sheets.Sheet) map[string]cell.Cell {
+// 	cellMap := make(map[string]cell.Cell)
+// 	for _, grid := range sheet.Data {
+// 		startRow := grid.StartRow    // 0-based API index
+// 		startCol := grid.StartColumn // 0-based API index
+
+// 		for rowIdx, row := range grid.RowData {
+// 			for colIdx, cellData := range row.Values {
+// 				absRow := int(startRow) + rowIdx + 1 // Convert to 1-based
+// 				absCol := int(startCol) + colIdx + 1
+
+// 				cell := cell.Cell{
+// 					A1:     fmt.Sprintf("%s", cell.PositionToA1(absRow, absCol)),
+// 					Row:    absRow,
+// 					Col:    absCol,
+// 					Value:  extractValue(cellData),
+// 					Note:   extractNote(cellData),
+// 					Format: extractFormat(cellData),
+// 				}
+// 				cellMap[cell.A1] = cell
+// 			}
+// 		}
+// 	}
+// 	return cellMap
+// }
+
+// // extractValue: prefer formatted (display) value, fallback to raw
+// func extractValue(cell *sheets.CellData) string {
+// 	if cell.FormattedValue != "" {
+// 		return cell.FormattedValue
+// 	}
+// 	if cell.UserEnteredValue != nil {
+// 		if cell.UserEnteredValue.StringValue != nil {
+// 			return *cell.UserEnteredValue.StringValue
+// 		}
+// 		// Handle other types: number, bool, formula, error
+// 		return fmt.Sprintf("%v", cell.UserEnteredValue)
+// 	}
+// 	return ""
+// }
+
+// // extractNote: yellow sticky note
+// func extractNote(cell *sheets.CellData) string {
+// 	if cell.Note != "" {
+// 		return cell.Note
+// 	}
+// 	return ""
+// }
+
+// // extractFormat: number format type (CURRENCY, DATE, TEXT, etc.)
+// func extractFormat(cell *sheets.CellData) string {
+// 	if cell.EffectiveFormat != nil &&
+// 		cell.EffectiveFormat.NumberFormat != nil &&
+// 		cell.EffectiveFormat.NumberFormat.Type != "" {
+// 		return cell.EffectiveFormat.NumberFormat.Type
+// 	}
+// 	return ""
+// }
+
+// func (sc *SheetCache) SaveAs(path string) error {
+// 	data, err := json.MarshalIndent(sc, "", "  ")
+// 	if err != nil {
+// 		return fmt.Errorf("failed to marshal data: %w", err)
+// 	}
+
+// 	dir := filepath.Dir(path)
+// 	if dir != "." && dir != "" {
+// 		if err := os.MkdirAll(dir, 0755); err != nil {
+// 			return fmt.Errorf("failed to create output directory: %w", err)
+// 		}
+// 	}
+
+// 	file, err := os.Create(path)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create output file: %w", err)
+// 	}
+// 	defer file.Close()
+// 	if err := file.Truncate(0); err != nil {
+// 		return fmt.Errorf("failed to truncate file: %w", err)
+// 	}
+// 	if _, err := file.Write(data); err != nil {
+// 		return fmt.Errorf("failed to write data: %w", err)
+
+// 	}
+// 	// if err := os.WriteFile(path, data, 0666); err != nil {
+// 	// 	return fmt.Errorf("failed to write data: %w", err)
+// 	// }
+// 	return nil
+// }
+
+// func (sc *SheetCache) CreateCell(c cell.Cell) error {
+// 	if _, ok := sc.Cells[c.A1]; ok {
+// 		return fmt.Errorf("cell %q already exists", c.A1)
+// 	}
+// 	if err := c.Validate(); err != nil {
+// 		return fmt.Errorf("can't create invalid cell: %w", err)
+// 	}
+// 	c.UpdatedAt = time.Now()
+// 	sc.Cells[c.A1] = c
+// 	return nil
+// }
+
+// func (sc *SheetCache) ReadCell(a1 string) (cell.Cell, bool) {
+// 	if c, ok := sc.Cells[a1]; ok {
+// 		return c, ok
+// 	}
+// 	return cell.Cell{}, false
+// }
+
+// func (sc *SheetCache) UpdateCell(c cell.Cell) error {
+// 	if _, ok := sc.Cells[c.A1]; !ok {
+// 		return fmt.Errorf("cell %q does not exist", c.A1)
+// 	}
+// 	if err := c.Validate(); err != nil {
+// 		return fmt.Errorf("cell invalid: %w", err)
+// 	}
+// 	c.UpdatedAt = time.Now()
+// 	sc.Cells[c.A1] = c
+// 	return nil
+// }
+
+// func (sc *SheetCache) Delete(a1 string) error {
+// 	if _, ok := sc.Cells[a1]; !ok {
+// 		return fmt.Errorf("cell %q does not exist", a1)
+// 	}
+// 	delete(sc.Cells, a1)
+// 	return nil
+// }
+
+// func (sc *SheetCache) GetCell(row, col int) cell.Cell {
+// 	return sc.Cells[cell.PositionToA1(row, col)]
+// }
+
+// // DataTable abstracts the local storage layer for the renderer
+// // type DataTable interface {
+// // 	RowCount() int
+// // 	ColCount() int
+// // 	CellValue(row, col int) string
+// // 	ColName(col int) string // Returns "A", "B", "C", etc.
+// // }
+
+// // Compile-time assertion to ensure SheetCache implements render.DataTable
+// var _ render.DataTable = (*SheetCache)(nil)
+
+// // RowCount returns the total number of rows.
+// func (sc *SheetCache) RowCount() int {
+// 	return sc.Rows
+// }
+
+// // ColCount returns the total number of columns.
+// func (sc *SheetCache) ColCount() int {
+// 	return sc.Cols
+// }
+
+// // CellValue returns the string value of a cell.
+// // Translates 0-based renderer coordinates to 1-based domain coordinates.
+// func (sc *SheetCache) CellValue(row, col int) string {
+// 	// GetCell expects 1-based indexing
+// 	c := sc.GetCell(row+1, col+1)
+// 	return c.Value
+// }
+
+// // CellNote returns the string note of a cell.
+// // Translates 0-based renderer coordinates to 1-based domain coordinates.
+// func (sc *SheetCache) CellNote(row, col int) string {
+// 	// GetCell expects 1-based indexing
+// 	c := sc.GetCell(row+1, col+1)
+// 	return c.Note
+// }
+
+// // ColName returns the column letter (e.g., "A", "B", "AA").
+// // Translates 0-based renderer column index to the expected format.
+// func (sc *SheetCache) ColName(col int) string {
+// 	// cell.ColIndexToLetter expects a 0-based index and handles the +1 internally
+// 	return cell.ColIndexToLetter(col)
+// }
+
+// func (sc *SheetCache) RowCells(row int) []cell.Cell {
+// 	domainRow := row + 1
+
+// 	cells := make([]cell.Cell, sc.Cols)
+// 	for col := 1; col <= sc.Cols; col++ {
+// 		a1 := cell.PositionToA1(domainRow, col)
+// 		if c, ok := sc.Cells[a1]; ok {
+// 			cells[col-1] = c
+// 		} else {
+// 			cells[col-1] = cell.Cell{A1: a1, Row: row, Col: col}
+// 		}
+// 	}
+// 	return cells
+// }
