@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Galdoba/gsheets-cli/internal/domain/profile"
 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
-	"github.com/Galdoba/gsheets-cli/internal/domain/view"
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
 	persistience "github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence"
 	"github.com/urfave/cli/v3"
@@ -17,7 +17,15 @@ func Read(cfg config.Config) *cli.Command {
 		Name:    "read",
 		Aliases: []string{"r"},
 		Usage:   "Read locally cached spreadsheet data and print to terminal",
-		Action:  readAction(cfg),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "profile",
+				Aliases: []string{"p"},
+				Usage:   "ID of the rendering profile to use",
+				Value:   "default",
+			},
+		},
+		Action: readAction(cfg),
 	}
 }
 
@@ -31,6 +39,7 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		// Use the extracted Sheet ID to guarantee consistency with fetchAction
 		spreadsheetID := extractSheetID(parameters[dataSheetID])
 		tableName := parameters[dataSheetName]
+		profileID := cmd.String("profile")
 
 		dataStore, err := persistience.NewData(spreadsheetID, tableName)
 		if err != nil {
@@ -51,11 +60,25 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		sc.UpdateDimentions()
 		fmt.Println("Using local cached data…")
 
-		// 1. Build the domain preset
-		preset := view.NewDefault(sc.ColCount())
+		// 1. Load Profile from Store
+		profileStore := persistience.NewProfiles()
+		p, err := profileStore.Get(spreadsheetID, tableName, profileID)
+		if err != nil {
+			// Fallback to a default profile if not found on disk
+			p = &profile.Profile{
+				ID:        profileID,
+				Name:      "Default",
+				SheetID:   spreadsheetID,
+				TableName: tableName,
+				Layout:    profile.LayoutConfig{}, // Empty layout triggers "show all" fallback in builder
+			}
+		}
 
-		// 2. Translate Domain -> Render using the Builder
-		renderCfg := view.BuildRenderConfig(sc, &preset, nil)
+		// 2. Translate Domain Profile -> Render Config
+		renderCfg, err := profile.BuildRenderConfig(sc, p)
+		if err != nil {
+			return fmt.Errorf("failed to build render config: %w", err)
+		}
 
 		// 3. Render all rows for CLI output (viewportStart=0, viewportHeight=RowCount)
 		output := render.Render(sc, renderCfg, 0, sc.RowCount())

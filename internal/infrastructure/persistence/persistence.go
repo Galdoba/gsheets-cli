@@ -3,9 +3,10 @@ package persistience
 import (
 	"github.com/Galdoba/appcontext/xdg"
 	"github.com/Galdoba/gsheets-cli/internal/application"
+	"github.com/Galdoba/gsheets-cli/internal/domain/profile"
 	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
-	"github.com/Galdoba/gsheets-cli/internal/domain/view"
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence/jsonstore"
+	"github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence/profilestore"
 )
 
 type Data interface {
@@ -18,19 +19,10 @@ func NewData(title, name string) (Data, error) {
 	return jsonstore.New(title, name)
 }
 
-type Presentation interface {
-	Load() (*view.Preset, error)
-	Save(*view.Preset) error
+// NewProfiles returns a repository for managing user rendering profiles.
+func NewProfiles() profile.Repository {
+	return profilestore.New()
 }
-
-// func NewPresentation(title, table, name string, columns int) (Presentation, error) {
-// 	ps := presetstore.New(title, table, name, columns)
-// 	return ps, nil
-// }
-
-// func NewSession() (*session.Sesion, error) {
-// 	path := Path("active.json")
-// }
 
 func Path(name string, subdirs ...string) string {
 	options := []xdg.PathOption{}

@@ -60,16 +60,85 @@ func resolveColumns(cfg Config) []renderColumn {
 }
 
 // computeColumnWidths now operates on the resolved columns
+// func computeColumnWidths(data DataTable, resolved []renderColumn, cfg Config, filteredRows, visibleRows []int) []int {
+// 	widths := make([]int, len(resolved))
+
+// 	for i, rc := range resolved {
+// 		if rc.Visibility == Collapsed {
+// 			// Handle width for collapsed/grouped columns
+// 			if rc.Config.WidthMode == WidthFixed && rc.Config.FixedWidth > 0 {
+// 				widths[i] = rc.Config.FixedWidth
+// 			} else {
+// 				// Default to "+N" marker, or the single CollapsedMarker if size is 1
+// 				marker := fmt.Sprintf("+%d", rc.GroupSize)
+// 				if rc.GroupSize == 1 && cfg.CollapsedMarker != "" {
+// 					marker = cfg.CollapsedMarker
+// 				}
+// 				widths[i] = lipgloss.Width(marker)
+// 			}
+// 			if widths[i] < 1 {
+// 				widths[i] = 1
+// 			}
+// 			continue
+// 		}
+
+// 		// --- Existing logic for Visible columns ---
+// 		if rc.Config.WidthMode == WidthFixed {
+// 			widths[i] = rc.Config.FixedWidth
+// 			continue
+// 		}
+
+// 		var scanRows []int
+// 		switch rc.Config.WidthMode {
+// 		case WidthMaxAll, WidthMinAll:
+// 			scanRows = makeRange(0, data.RowCount())
+// 		case WidthMaxFiltered, WidthMinFiltered:
+// 			scanRows = filteredRows
+// 		case WidthMaxVisible, WidthMinVisible:
+// 			scanRows = visibleRows
+// 		}
+
+// 		maxW, minW := 0, 1000000
+// 		for _, r := range scanRows {
+// 			// 1. Fetch raw data
+// 			val := data.CellValue(r, rc.OriginalIndex)
+// 			note := data.CellNote(r, rc.OriginalIndex)
+
+// 			// 2. Process notes/markers BEFORE measuring width
+// 			finalContent := processNote(val, note, rc.Config.NoteMode)
+
+// 			// 3. Measure the final rendered string
+// 			w := lipgloss.Width(finalContent)
+// 			if w > maxW {
+// 				maxW = w
+// 			}
+// 			if w < minW {
+// 				minW = w
+// 			}
+// 		}
+
+// 		switch rc.Config.WidthMode {
+// 		case WidthMaxAll, WidthMaxFiltered, WidthMaxVisible:
+// 			widths[i] = maxW
+// 		case WidthMinAll, WidthMinFiltered, WidthMinVisible:
+// 			widths[i] = minW
+// 		}
+
+// 		if widths[i] < 1 {
+// 			widths[i] = 1
+// 		}
+// 	}
+// 	return widths
+// }
+
 func computeColumnWidths(data DataTable, resolved []renderColumn, cfg Config, filteredRows, visibleRows []int) []int {
 	widths := make([]int, len(resolved))
 
 	for i, rc := range resolved {
 		if rc.Visibility == Collapsed {
-			// Handle width for collapsed/grouped columns
 			if rc.Config.WidthMode == WidthFixed && rc.Config.FixedWidth > 0 {
 				widths[i] = rc.Config.FixedWidth
 			} else {
-				// Default to "+N" marker, or the single CollapsedMarker if size is 1
 				marker := fmt.Sprintf("+%d", rc.GroupSize)
 				if rc.GroupSize == 1 && cfg.CollapsedMarker != "" {
 					marker = cfg.CollapsedMarker
@@ -82,38 +151,40 @@ func computeColumnWidths(data DataTable, resolved []renderColumn, cfg Config, fi
 			continue
 		}
 
-		// --- Existing logic for Visible columns ---
 		if rc.Config.WidthMode == WidthFixed {
 			widths[i] = rc.Config.FixedWidth
 			continue
 		}
 
-		var scanRows []int
-		switch rc.Config.WidthMode {
-		case WidthMaxAll, WidthMinAll:
-			scanRows = makeRange(0, data.RowCount())
-		case WidthMaxFiltered, WidthMinFiltered:
-			scanRows = filteredRows
-		case WidthMaxVisible, WidthMinVisible:
-			scanRows = visibleRows
-		}
-
 		maxW, minW := 0, 1000000
-		for _, r := range scanRows {
-			// 1. Fetch raw data
+
+		// Helper closure to measure a single row (inlined for performance)
+		measure := func(r int) {
 			val := data.CellValue(r, rc.OriginalIndex)
 			note := data.CellNote(r, rc.OriginalIndex)
-
-			// 2. Process notes/markers BEFORE measuring width
 			finalContent := processNote(val, note, rc.Config.NoteMode)
-
-			// 3. Measure the final rendered string
 			w := lipgloss.Width(finalContent)
 			if w > maxW {
 				maxW = w
 			}
 			if w < minW {
 				minW = w
+			}
+		}
+
+		// Iterate directly without allocating index slices
+		switch rc.Config.WidthMode {
+		case WidthMaxAll, WidthMinAll:
+			for r := 0; r < data.RowCount(); r++ {
+				measure(r)
+			}
+		case WidthMaxFiltered, WidthMinFiltered:
+			for _, r := range filteredRows {
+				measure(r)
+			}
+		case WidthMaxVisible, WidthMinVisible:
+			for _, r := range visibleRows {
+				measure(r)
 			}
 		}
 

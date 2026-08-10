@@ -164,31 +164,12 @@ func (sc *SheetCache) ColName(col int) string {
 }
 
 // RowCells returns all cells in the given 0‑based row.
+// Zero-allocation: returns a slice header pointing to the underlying grid.
 func (sc *SheetCache) RowCells(row int) []cell.Cell {
-	domainRow := row + 1
-	cells := make([]cell.Cell, sc.Cols)
-	if row < len(sc.Grid) {
-		for colIdx := 0; colIdx < sc.Cols; colIdx++ {
-			if colIdx < len(sc.Grid[row]) {
-				cells[colIdx] = sc.Grid[row][colIdx]
-			} else {
-				cells[colIdx] = cell.Cell{
-					A1:  cell.PositionToA1(domainRow, colIdx+1),
-					Row: domainRow,
-					Col: colIdx + 1,
-				}
-			}
-		}
-	} else {
-		for colIdx := 0; colIdx < sc.Cols; colIdx++ {
-			cells[colIdx] = cell.Cell{
-				A1:  cell.PositionToA1(domainRow, colIdx+1),
-				Row: domainRow,
-				Col: colIdx + 1,
-			}
-		}
+	if row < 0 || row >= len(sc.Grid) {
+		return nil
 	}
-	return cells
+	return sc.Grid[row]
 }
 
 func (sc *SheetCache) Column(col int) []cell.Cell {
@@ -245,28 +226,59 @@ func (sc *SheetCache) SaveAs(path string) error {
 // parseGridData builds a dense 2‑D grid from a *sheets.Sheet.
 // It uses GridProperties to allocate the correct dimensions and fills in
 // only the cells returned by the API. All absent cells remain zero values.
+// Function gracefully handles missing GridProperties by calculating dimensions from the payload.
 func parseGridData(sheet *sheets.Sheet) [][]cell.Cell {
-	rows := int(sheet.Properties.GridProperties.RowCount)
-	cols := int(sheet.Properties.GridProperties.ColumnCount)
+	var rows, cols int
+
+	// 1. Attempt to read dimensions from GridProperties if available
+	if sheet.Properties != nil && sheet.Properties.GridProperties != nil {
+		rows = int(sheet.Properties.GridProperties.RowCount)
+		cols = int(sheet.Properties.GridProperties.ColumnCount)
+	}
+
+	// 2. If GridProperties was missing (due to API field restrictions) or returned 0,
+	// calculate the max bounds dynamically from the returned data blocks.
+	if rows == 0 || cols == 0 {
+		for _, data := range sheet.Data {
+			startRow := int(data.StartRow)
+			startCol := int(data.StartColumn)
+
+			// Calculate max rows needed
+			if numRows := startRow + len(data.RowData); numRows > rows {
+				rows = numRows
+			}
+
+			// Calculate max cols needed
+			for _, row := range data.RowData {
+				if numCols := startCol + len(row.Values); numCols > cols {
+					cols = numCols
+				}
+			}
+		}
+	}
+
+	// If the sheet is genuinely empty, return an empty grid
 	if rows == 0 || cols == 0 {
 		return [][]cell.Cell{}
 	}
 
+	// 3. Allocate the dense 2D grid
 	grid := make([][]cell.Cell, rows)
 	for i := range grid {
 		grid[i] = make([]cell.Cell, cols)
 	}
 
+	// 4. Populate the grid
 	for _, data := range sheet.Data {
 		startRow := int(data.StartRow)
 		startCol := int(data.StartColumn)
 		for rowIdx, row := range data.RowData {
-			absRow := startRow + rowIdx + 1
+			absRow := startRow + rowIdx + 1 // 1-based
 			if absRow > rows {
 				continue
 			}
 			for colIdx, cellData := range row.Values {
-				absCol := startCol + colIdx + 1
+				absCol := startCol + colIdx + 1 // 1-based
 				if absCol > cols {
 					continue
 				}

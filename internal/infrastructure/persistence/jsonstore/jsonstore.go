@@ -62,31 +62,23 @@ func (js *jsonStore) Load() (*sheet.SheetCache, error) {
 	return js.data, nil
 }
 
-// func (js *jsonStore) Merge(fetched *sheet.SheetCache) error {
-// 	js.mu.Lock()
-// 	defer js.mu.Unlock()
+// Merge updates the local cache with freshly fetched data.
+// Since we use a dense 2D grid, we simply overwrite the grid and metadata.
+func (js *jsonStore) Merge(fetched *sheet.SheetCache) error {
+	js.mu.Lock()
+	defer js.mu.Unlock()
 
-// 	for a1, newCell := range fetched.Cells {
-// 		oldCell, exists := js.data.Cells[a1]
-// 		if !exists {
-// 			newCell.UpdatedAt = fetched.LastSync
-// 			js.data.Cells[a1] = newCell
-// 			continue
-// 		}
-// 		if cell.Equal(oldCell, newCell) {
-// 			continue
-// 		}
-// 		newCell.UpdatedAt = fetched.LastSync
-// 		js.data.Cells[a1] = newCell
-// 	}
+	js.data.Grid = fetched.Grid
+	js.data.Rows = fetched.Rows
+	js.data.Cols = fetched.Cols
+	js.data.LastSync = fetched.LastSync
 
-// 	if fetched.RevisionID != "" {
-// 		js.data.RevisionID = fetched.RevisionID
-// 	}
-// 	js.data.LastSync = fetched.LastSync
+	if fetched.RevisionID != "" {
+		js.data.RevisionID = fetched.RevisionID
+	}
 
-// 	return nil
-// }
+	return nil
+}
 
 func (js *jsonStore) Save() error {
 	js.mu.Lock()
