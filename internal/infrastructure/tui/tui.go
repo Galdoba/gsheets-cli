@@ -7,15 +7,15 @@ import (
 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
 )
 
-type Model struct {
+type MainModel struct {
 	data           render.DataTable
 	cfg            render.Config
 	viewportStart  int
 	viewportHeight int
 }
 
-func NewModel(data render.DataTable, cfg render.Config) Model {
-	return Model{
+func NewMainModel(data render.DataTable, cfg render.Config) MainModel {
+	return MainModel{
 		data:           data,
 		cfg:            cfg,
 		viewportStart:  0,
@@ -23,11 +23,11 @@ func NewModel(data render.DataTable, cfg render.Config) Model {
 	}
 }
 
-func (m Model) Init() tea.Cmd {
+func (m MainModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	// In v2, KeyMsg is an interface. We use KeyPressMsg for standard key presses.
@@ -53,7 +53,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) View() tea.View {
+func (m MainModel) View() tea.View {
 	// 1. Delegate the heavy lifting entirely to your render engine
 	tableStr := render.Render(m.data, m.cfg, m.viewportStart, m.viewportHeight)
 

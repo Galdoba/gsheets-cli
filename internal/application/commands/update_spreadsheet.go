@@ -3,34 +3,24 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
+	"github.com/Galdoba/gsheets-cli/internal/service"
 	"github.com/urfave/cli/v3"
-	"google.golang.org/api/sheets/v4"
 )
 
 func Update(cfg config.Config) *cli.Command {
 	return &cli.Command{
 		Name:    "update",
 		Aliases: []string{"u"},
-		Usage:   "Update a specific cell in the spreadsheet",
+		Usage:   "Update cells in the spreadsheet (values and/or notes)",
 		Flags: []cli.Flag{
-			&cli.IntFlag{
-				Name:    "row",
-				Aliases: []string{"r"},
-				Usage:   "Row number (1-based)",
-				Value:   1,
-			},
-			&cli.IntFlag{
-				Name:    "col",
-				Aliases: []string{"k"},
-				Usage:   "Column number (1-based)",
-				Value:   1,
-			},
 			&cli.StringFlag{
-				Name:     "value",
-				Aliases:  []string{"v"},
-				Usage:    "New cell value",
+				Name:     "updates",
+				Aliases:  []string{"U"},
+				Usage:    "Semicolon-separated list of cell updates: Cell=field=value, e.g. B6798=value=val1;B6799=note=val2",
 				Required: true,
 			},
 		},
@@ -44,35 +34,69 @@ func updateAction(cfg config.Config) cli.ActionFunc {
 		if err != nil {
 			return fmt.Errorf("failed to collect spreadsheet data: %w", err)
 		}
-		credFile := parameters[dataCredFile]
-		sheetID := parameters[dataSheetID]
-		sheetName := parameters[dataSheetName]
-		row := cmd.Int("row")
-		col := cmd.Int("col")
-		value := cmd.String("value")
 
-		srv, err := getService(ctx, credFile)
+		params := service.SpreadsheetServiceParams{
+			SpreadsheetID:  parameters[dataSheetID],
+			SheetName:      parameters[dataSheetName],
+			CredentialFile: parameters[dataCredFile],
+		}
+
+		// Parse --updates
+		updatesStr := cmd.String("updates")
+		changes, err := parseUpdates(updatesStr)
 		if err != nil {
 			return err
 		}
 
-		actualID := extractSheetID(sheetID)
-		cellRef := fmt.Sprintf("%s!%s%d", sheetName, colToLetter(col), row)
-
-		rb := &sheets.ValueRange{
-			Values: [][]any{{value}},
+		svc := service.NewSpreadsheetService()
+		if err := svc.Update(ctx, params, changes...); err != nil {
+			return err
 		}
 
-		_, err = srv.Spreadsheets.Values.Update(actualID, cellRef, rb).
-			ValueInputOption("USER_ENTERED").
-			Do()
-		if err != nil {
-			return fmt.Errorf("failed to update cell: %w", err)
+		fmt.Printf("✅ Successfully updated %d cell(s)\n", len(changes))
+		// Update last used table
+		actualID := parameters[dataSheetID] // may be URL; service handles it internally
+		if err := config.UpdateLastUsed(actualID, parameters[dataSheetName]); err != nil {
+			return fmt.Errorf("failed to update last used table: %w", err)
 		}
-
-		fmt.Printf("✅ Successfully updated cell %s with value '%s'\n", cellRef, value)
-		config.UpdateUsage(actualID, sheetName, "default")
 		return nil
-
 	}
+}
+
+// parseUpdates converts the --updates string into []service.CellChange.
+// Format: Cell=field=value (field optional, defaults to "value").
+func parseUpdates(input string) ([]service.CellChange, error) {
+	var changes []service.CellChange
+	entries := strings.SplitSeq(input, ";")
+	for entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		parts := strings.SplitN(entry, "=", 3)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid update entry %q: expected Cell=value or Cell=field=value", entry)
+		}
+		cellRef := strings.TrimSpace(parts[0])
+		field := "value"
+		value := parts[1]
+		if len(parts) == 3 {
+			field = strings.TrimSpace(parts[1])
+			value = parts[2]
+		}
+		row, col, err := cell.A1ToPosition(cellRef)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cell reference %q: %w", cellRef, err)
+		}
+		changes = append(changes, service.CellChange{
+			Row:   row,
+			Col:   col,
+			Field: field,
+			Value: value,
+		})
+	}
+	if len(changes) == 0 {
+		return nil, fmt.Errorf("no valid updates provided")
+	}
+	return changes, nil
 }

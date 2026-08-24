@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
 	"github.com/urfave/cli/v3"
@@ -39,19 +38,6 @@ func getService(ctx context.Context, credFile string) (*sheets.Service, error) {
 	return srv, nil
 }
 
-// extractSheetID pulls the ID from a full Google Sheets URL or returns it as-is
-func extractSheetID(input string) string {
-	if idx := strings.Index(input, "/d/"); idx != -1 {
-		rest := input[idx+3:]
-		end := strings.Index(rest, "/")
-		if end == -1 {
-			end = len(rest)
-		}
-		return rest[:end]
-	}
-	return input
-}
-
 // colToLetter converts 1-based column index to Excel-style A1 notation
 func colToLetter(n int) string {
 	if n <= 0 {
@@ -79,40 +65,6 @@ func getPrioritized(sources ...string) string {
 }
 
 func getSpreadsheetData(cmd *cli.Command, cfg config.Config) (map[string]string, error) {
-	// credFile := getPrioritized(
-	// 	cmd.Root().String(flags.Credentials),
-	// 	cfg.Credentials.ServiceAccounts[cfg.Credentials.ActiveAccount],
-	// )
-	// if credFile == "" {
-	// 	return nil, fmt.Errorf("no service account credential file provided")
-	// }
-
-	// lastSheetID, lastTableName := extractSheetIdAndName(cfg)
-	// fmt.Printf("lastSheetID: %q\n", lastSheetID)
-
-	// sheetID := getPrioritized(
-	// 	cmd.Root().String(flags.Spreadsheet),
-	// 	lastSheetID,
-	// )
-	// if sheetID == "" {
-	// 	return nil, fmt.Errorf("no sheet ID provided")
-	// }
-
-	// sheetName := getPrioritized(
-	// 	cmd.Root().String(flags.Sheet),
-	// 	lastTableName,
-	// )
-	// if sheetName == "" {
-	// 	return nil, fmt.Errorf("no sheet name provided")
-	// }
-
-	// data := make(map[string]string, 3)
-	// data[dataCredFile] = credFile
-	// data[dataSheetID] = sheetID
-	// data[dataSheetName] = sheetName
-	// lastSheet, lastTable, _ := cfg.LastUsedTable()
-	// data[dataLastSheetName] = lastSheet
-	// data[dataLastTableName] = lastTable
 	credentialsPath := cfg.Credentials.ServiceAccounts[cfg.Credentials.ActiveAccount]
 	if c := cmd.String("credentials"); c != "" {
 		credentialsPath = c
@@ -137,9 +89,10 @@ func getSpreadsheetData(cmd *cli.Command, cfg config.Config) (map[string]string,
 		return nil, fmt.Errorf("sheet name not passed")
 	}
 
-	data := make(map[string]string, 3)
-	data[dataCredFile] = credentialsPath
-	data[dataSheetID] = tableID
-	data[dataSheetName] = sheetName
+	data := map[string]string{
+		dataCredFile:  credentialsPath,
+		dataSheetID:   tableID,
+		dataSheetName: sheetName,
+	}
 	return data, nil
 }

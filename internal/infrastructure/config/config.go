@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	Credentials Credentials  `toml:"credentials"`
-	Sheets      Spreadsheets `toml:"sheets"`
+	Credentials Credentials     `toml:"credentials"`
+	Sheets      Spreadsheets    `toml:"sheets"`
+	Profiles    ProfileBindings `toml:"profiles"`
 }
 
 type Credentials struct {
@@ -18,8 +19,13 @@ type Credentials struct {
 }
 
 type Spreadsheets struct {
-	LastUsed LastUse          `toml:"last_used"`
+	LastUsed LastUsed         `toml:"last_used"`
 	Tables   map[string]Table `toml:"tables"`
+}
+
+type LastUsed struct {
+	TableID   string `toml:"table_id"`
+	SheetName string `toml:"sheet_name"`
 }
 
 type Table struct {
@@ -27,10 +33,8 @@ type Table struct {
 	SheetsNames []string `toml:"sheets_names"`
 }
 
-type LastUse struct {
-	TableID   string `toml:"table_id"`
-	SheetName string `toml:"sheet_name"`
-	ProfileID string `toml:"profile_id"`
+type ProfileBindings struct {
+	Tables map[string][]string `toml:"tables"` // key: profileName, value: list of table identifiers
 }
 
 func Default() Config {
@@ -42,10 +46,9 @@ func Default() Config {
 			},
 		},
 		Sheets: Spreadsheets{
-			LastUsed: LastUse{
+			LastUsed: LastUsed{
 				TableID:   "",
 				SheetName: "",
-				ProfileID: "default",
 			},
 			Tables: map[string]Table{
 				"{spreadsheet_alias}": {
@@ -56,14 +59,27 @@ func Default() Config {
 				},
 			},
 		},
+		Profiles: ProfileBindings{
+			Tables: map[string][]string{
+				"default": {},
+			},
+		},
 	}
 }
 
-func (cfg Config) LastUsedTable() (string, string, string) {
-	return cfg.Sheets.LastUsed.TableID, cfg.Sheets.LastUsed.SheetName, cfg.Sheets.LastUsed.ProfileID
+func (cfg Config) ResolveProfileForTable(tableKey string) string {
+	for profileName, tables := range cfg.Profiles.Tables {
+		for _, t := range tables {
+			if t == tableKey {
+				return profileName
+			}
+		}
+	}
+	return "default"
 }
 
-func UpdateUsage(tableID, sheetName, profileID string) error {
+// UpdateLastUsed persists the most recently used spreadsheet and table identifiers.
+func UpdateLastUsed(tableID, sheetName string) error {
 	cm, err := configmanager.New(application.AppName, Default(), configmanager.WithFormat(configmanager.TOML))
 	if err != nil {
 		return fmt.Errorf("failed to create config manager: %w", err)
@@ -77,17 +93,52 @@ func UpdateUsage(tableID, sheetName, profileID string) error {
 		}
 	}
 	cm.UpdateAndSave(func(c *Config) {
-		c.Sheets.LastUsed.TableID = updateNew(c.Sheets.LastUsed.TableID, tableID)
-		c.Sheets.LastUsed.SheetName = updateNew(c.Sheets.LastUsed.SheetName, sheetName)
-		c.Sheets.LastUsed.ProfileID = updateNew(c.Sheets.LastUsed.ProfileID, profileID)
+		if tableID != "" {
+			c.Sheets.LastUsed.TableID = tableID
+		}
+		if sheetName != "" {
+			c.Sheets.LastUsed.SheetName = sheetName
+		}
 	})
-
 	return nil
 }
 
-func updateNew(old, new string) string {
-	if new == "" {
-		return old
+// SetProfileBinding updates the profile binding for a given table.
+// It removes the table from any existing profile bindings and adds it to the new profile.
+func SetProfileBinding(spreadsheetID, sheetName, profileName string) error {
+	cm, err := configmanager.New(application.AppName, Default(), configmanager.WithFormat(configmanager.TOML))
+	if err != nil {
+		return fmt.Errorf("failed to create config manager: %w", err)
 	}
-	return new
+	if err := cm.Load(); err != nil {
+		if err := cm.Save(); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+		if err := cm.Load(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+	}
+
+	tableKey := spreadsheetID + "---" + sheetName
+
+	cm.UpdateAndSave(func(c *Config) {
+		// Ensure the map is initialized
+		if c.Profiles.Tables == nil {
+			c.Profiles.Tables = make(map[string][]string)
+		}
+		// Remove table from all profiles
+		for prof, tables := range c.Profiles.Tables {
+			newTables := make([]string, 0, len(tables))
+			for _, t := range tables {
+				if t != tableKey {
+					newTables = append(newTables, t)
+				}
+			}
+			c.Profiles.Tables[prof] = newTables
+		}
+		// Add table to the new profile
+		c.Profiles.Tables[profileName] = append(c.Profiles.Tables[profileName], tableKey)
+	})
+
+	return nil
 }

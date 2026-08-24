@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
@@ -326,26 +327,17 @@ func extractFormat(cell *sheets.CellData) string {
 	return ""
 }
 
-// ---------------------------------------------------------------------------
-// A1 notation helpers (internal)
-// ---------------------------------------------------------------------------
+//HELPERS
 
-// ensureGridSize is a tiny helper used only by CreateCell to grow the grid
-// when a cell is added beyond the current bounds.
-// func (sc *SheetCache) ensureGridSize(row, col int) {
-// 	// Expand columns in all existing rows if necessary
-// 	for len(sc.Grid[0]) < col {
-// 		for i := range sc.Grid {
-// 			sc.Grid[i] = append(sc.Grid[i], cell.Cell{})
-// 		}
-// 	}
-// 	// Add missing rows
-// 	for len(sc.Grid) < row {
-// 		newRow := make([]cell.Cell, max(col, sc.Cols))
-// 		sc.Grid = append(sc.Grid, newRow)
-// 	}
-// 	// Keep Columns consistent
-// 	if sc.Cols < col {
-// 		sc.Cols = col
-// 	}
-// }
+// ExtractSheetID pulls the ID from a full Google Sheets URL or returns it as-is
+func ExtractSheetID(input string) string {
+	if _, after, ok := strings.Cut(input, "/d/"); ok {
+		rest := after
+		end := strings.Index(rest, "/")
+		if end == -1 {
+			end = len(rest)
+		}
+		return rest[:end]
+	}
+	return input
+}

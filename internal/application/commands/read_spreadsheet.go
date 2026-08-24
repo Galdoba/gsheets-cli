@@ -6,8 +6,10 @@ import (
 
 	"github.com/Galdoba/gsheets-cli/internal/domain/profile"
 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
+	"github.com/Galdoba/gsheets-cli/internal/domain/sheet"
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
 	persistience "github.com/Galdoba/gsheets-cli/internal/infrastructure/persistence"
+	"github.com/Galdoba/gsheets-cli/internal/service"
 	"github.com/urfave/cli/v3"
 )
 
@@ -20,8 +22,7 @@ func Read(cfg config.Config) *cli.Command {
 			&cli.StringFlag{
 				Name:    "profile",
 				Aliases: []string{"p"},
-				Usage:   "ID of the rendering profile to use",
-				Value:   "default",
+				Usage:   "Name of the rendering profile to use (defaults to table binding or 'default')",
 			},
 		},
 		Action: readAction(cfg),
@@ -35,22 +36,20 @@ func readAction(cfg config.Config) cli.ActionFunc {
 			return fmt.Errorf("failed to collect spreadsheet data: %w", err)
 		}
 
-		// Use the extracted Sheet ID to guarantee consistency with fetchAction
-		spreadsheetID := extractSheetID(parameters[dataSheetID])
-		tableName := parameters[dataSheetName]
-		profileID := cmd.String("profile")
-
-		dataStore, err := persistience.NewData(spreadsheetID, tableName)
-		if err != nil {
-			return fmt.Errorf("failed to initialize storage: %w", err)
+		params := service.SpreadsheetServiceParams{
+			SpreadsheetID:  parameters[dataSheetID],
+			SheetName:      parameters[dataSheetName],
+			CredentialFile: parameters[dataCredFile],
 		}
 
-		sc, err := dataStore.Load()
+		svc := service.NewSpreadsheetService()
+
+		// Load local cache
+		sc, err := svc.LoadCache(params)
 		if err != nil {
-			return fmt.Errorf("failed to load data: %w", err)
+			return err
 		}
 
-		// If no data has been fetched yet, the cache will be empty
 		if sc.RowCount() == 0 {
 			fmt.Println("⚠️  No local data found. Please run the 'fetch' command first.")
 			return nil
@@ -59,34 +58,34 @@ func readAction(cfg config.Config) cli.ActionFunc {
 		sc.UpdateDimentions()
 		fmt.Println("Using local cached data…")
 
-		// 1. Load Profile from Store
-		profileStore := persistience.NewProfiles()
-		p, err := profileStore.Get(spreadsheetID, tableName, profileID)
-		if err != nil {
-			// Fallback to a default profile if not found on disk
-			p = &profile.Profile{
-				ID:        profileID,
-				Name:      "Default",
-				SheetID:   spreadsheetID,
-				TableName: tableName,
-				Layout:    profile.LayoutConfig{}, // Empty layout triggers "show all" fallback in builder
-			}
+		// Resolve profile name
+		spreadsheetID := sheet.ExtractSheetID(parameters[dataSheetID]) // using existing helper in shared.go
+		tableKey := spreadsheetID + "---" + parameters[dataSheetName]
+		profileName := cmd.String("profile")
+		if profileName == "" {
+			profileName = cfg.ResolveProfileForTable(tableKey)
 		}
 
-		// 2. Translate Domain Profile -> Render Config
+		profileStore := persistience.NewProfiles()
+		p, err := profileStore.Get(profileName)
+		if err != nil {
+			// Fallback to built-in default if the resolved profile doesn't exist.
+			p = profile.DefaultProfile()
+			p.Name = profileName
+		}
+
+		// Build render config and render
 		renderCfg, err := profile.BuildRenderConfig(sc, p)
 		if err != nil {
 			return fmt.Errorf("failed to build render config: %w", err)
 		}
 
-		// 3. Render all rows for CLI output (viewportStart=0, viewportHeight=RowCount)
 		output := render.Render(sc, renderCfg, 0, sc.RowCount())
 		fmt.Print(output)
 
+		// TODO: Add optional fetch step here if flags/conditions allow.
+		// e.g., if --fetch flag is set, call svc.Fetch then svc.SetCache then reload cache.
+
 		return nil
 	}
-}
-
-func extractSheetIdAndName(cfg config.Config) (string, string) {
-	return cfg.Sheets.LastUsed.TableID, cfg.Sheets.LastUsed.SheetName
 }

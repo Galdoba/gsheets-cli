@@ -38,8 +38,11 @@ var validStringsOps = map[Operator]bool{OpContainsAny: true, OpContainsAll: true
 // Compile translates a Group into a fast predicate function
 func (fs *FilterSet[T]) Compile(g Group) (func(row []T) bool, error) {
 	var compiledRules []compiledRule
+	var nestedPredicates []func(row []T) bool
+
 	isOrLogic := strings.ToLower(g.Logic) == "or"
 
+	// Compile flat rules
 	for _, rule := range g.Rules {
 		cr, err := fs.compileRule(rule)
 		if err != nil {
@@ -48,24 +51,45 @@ func (fs *FilterSet[T]) Compile(g Group) (func(row []T) bool, error) {
 		compiledRules = append(compiledRules, cr)
 	}
 
-	// Return the hot-loop closure
-	return func(row []T) bool {
-		if len(compiledRules) == 0 {
-			return true
+	// Recursively compile nested groups
+	for _, subGroup := range g.Groups {
+		pred, err := fs.Compile(subGroup)
+		if err != nil {
+			return nil, err
 		}
+		nestedPredicates = append(nestedPredicates, pred)
+	}
 
+	// If no rules and no nested groups, always pass
+	if len(compiledRules) == 0 && len(nestedPredicates) == 0 {
+		return func(row []T) bool { return true }, nil
+	}
+
+	return func(row []T) bool {
+		// Evaluate all flat rules
 		for _, cr := range compiledRules {
 			passes := fs.evaluateRule(row, cr)
-
 			if isOrLogic && passes {
-				return true // Short-circuit OR
+				return true
 			}
 			if !isOrLogic && !passes {
-				return false // Short-circuit AND
+				return false
 			}
 		}
 
-		return !isOrLogic // If OR, all failed. If AND, all passed.
+		// Evaluate all nested groups
+		for _, pred := range nestedPredicates {
+			passes := pred(row)
+			if isOrLogic && passes {
+				return true
+			}
+			if !isOrLogic && !passes {
+				return false
+			}
+		}
+
+		// If OR, all failed. If AND, all passed.
+		return !isOrLogic
 	}, nil
 }
 

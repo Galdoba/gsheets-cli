@@ -43,8 +43,9 @@ type Rule struct {
 
 // Group represents a collection of rules combined with logical operators
 type Group struct {
-	Logic string `json:"logic"` // "and" (default) or "or"
-	Rules []Rule `json:"rules"`
+	Logic  string  `json:"logic"` // "and" (default) or "or"
+	Rules  []Rule  `json:"rules"`
+	Groups []Group `json:"groups,omitempty"` // nested groups
 }
 
 // Parsers define how to convert string values from rules into typed values

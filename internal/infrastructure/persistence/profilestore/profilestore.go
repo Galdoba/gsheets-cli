@@ -23,15 +23,17 @@ func New() *Store {
 	return &Store{dir: dir}
 }
 
-func (s *Store) fileName(sheetID, tableName, profileID string) string {
-	return fmt.Sprintf("%s---%s---%s.json", sheetID, tableName, profileID)
+func (s *Store) fileName(name string) string {
+	// Sanitize: remove any path separators, just in case.
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, `\`, "_")
+	return fmt.Sprintf("%s.json", name)
 }
 
-func (s *Store) List(sheetID, tableName string) ([]profile.Profile, error) {
+func (s *Store) List() ([]profile.Profile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	prefix := fmt.Sprintf("%s---%s---", sheetID, tableName)
 	var profiles []profile.Profile
 
 	if err := os.MkdirAll(s.dir, 0755); err != nil {
@@ -44,7 +46,7 @@ func (s *Store) List(sheetID, tableName string) ([]profile.Profile, error) {
 	}
 
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".json") {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
 			p, err := s.loadFromFile(filepath.Join(s.dir, entry.Name()))
 			if err == nil {
 				profiles = append(profiles, *p)
@@ -54,10 +56,10 @@ func (s *Store) List(sheetID, tableName string) ([]profile.Profile, error) {
 	return profiles, nil
 }
 
-func (s *Store) Get(sheetID, tableName, profileID string) (*profile.Profile, error) {
+func (s *Store) Get(name string) (*profile.Profile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.loadFromFile(filepath.Join(s.dir, s.fileName(sheetID, tableName, profileID)))
+	return s.loadFromFile(filepath.Join(s.dir, s.fileName(name)))
 }
 
 func (s *Store) Save(p *profile.Profile) error {
@@ -73,14 +75,14 @@ func (s *Store) Save(p *profile.Profile) error {
 		return err
 	}
 
-	path := filepath.Join(s.dir, s.fileName(p.SheetID, p.TableName, p.ID))
+	path := filepath.Join(s.dir, s.fileName(p.Name))
 	return os.WriteFile(path, data, 0644)
 }
 
-func (s *Store) Delete(sheetID, tableName, profileID string) error {
+func (s *Store) Delete(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	path := filepath.Join(s.dir, s.fileName(sheetID, tableName, profileID))
+	path := filepath.Join(s.dir, s.fileName(name))
 	return os.Remove(path)
 }
 
