@@ -71,6 +71,7 @@ func updateAction(cfg config.Config) cli.ActionFunc {
 		}
 
 		fmt.Printf("✅ Successfully updated cell %s with value '%s'\n", cellRef, value)
+		config.UpdateUsage(actualID, sheetName, "default")
 		return nil
 
 	}

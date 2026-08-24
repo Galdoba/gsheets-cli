@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/Galdoba/gsheets-cli/internal/domain/profile"
 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
@@ -89,13 +88,5 @@ func readAction(cfg config.Config) cli.ActionFunc {
 }
 
 func extractSheetIdAndName(cfg config.Config) (string, string) {
-	lastUsed := cfg.Sheets.LastUsedTable
-	data := strings.Split(lastUsed, "::")
-	if len(data) != 2 {
-		return "", ""
-	}
-	key := data[0]
-	name := data[1]
-	address := cfg.Sheets.Tables[key].Address
-	return address, name
+	return cfg.Sheets.LastUsed.TableID, cfg.Sheets.LastUsed.SheetName
 }

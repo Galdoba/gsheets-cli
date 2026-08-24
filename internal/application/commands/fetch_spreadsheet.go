@@ -78,6 +78,7 @@ func fetchAction(cfg config.Config) cli.ActionFunc {
 		}
 
 		fmt.Printf("✅ Successfully synced %d rows to local storage\n", fetched.Rows)
+		config.UpdateUsage(actualID, tableName, "default")
 
 		return nil
 	}

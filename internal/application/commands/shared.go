@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Galdoba/gsheets-cli/internal/application/flags"
 	"github.com/Galdoba/gsheets-cli/internal/infrastructure/config"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/api/option"
@@ -80,40 +79,67 @@ func getPrioritized(sources ...string) string {
 }
 
 func getSpreadsheetData(cmd *cli.Command, cfg config.Config) (map[string]string, error) {
-	credFile := getPrioritized(
-		cmd.Root().String(flags.Credentials),
-		cfg.Credentials.ServiceAccounts[cfg.Credentials.ActiveAccount],
-	)
-	if credFile == "" {
-		return nil, fmt.Errorf("no service account credential file provided")
+	// credFile := getPrioritized(
+	// 	cmd.Root().String(flags.Credentials),
+	// 	cfg.Credentials.ServiceAccounts[cfg.Credentials.ActiveAccount],
+	// )
+	// if credFile == "" {
+	// 	return nil, fmt.Errorf("no service account credential file provided")
+	// }
+
+	// lastSheetID, lastTableName := extractSheetIdAndName(cfg)
+	// fmt.Printf("lastSheetID: %q\n", lastSheetID)
+
+	// sheetID := getPrioritized(
+	// 	cmd.Root().String(flags.Spreadsheet),
+	// 	lastSheetID,
+	// )
+	// if sheetID == "" {
+	// 	return nil, fmt.Errorf("no sheet ID provided")
+	// }
+
+	// sheetName := getPrioritized(
+	// 	cmd.Root().String(flags.Sheet),
+	// 	lastTableName,
+	// )
+	// if sheetName == "" {
+	// 	return nil, fmt.Errorf("no sheet name provided")
+	// }
+
+	// data := make(map[string]string, 3)
+	// data[dataCredFile] = credFile
+	// data[dataSheetID] = sheetID
+	// data[dataSheetName] = sheetName
+	// lastSheet, lastTable, _ := cfg.LastUsedTable()
+	// data[dataLastSheetName] = lastSheet
+	// data[dataLastTableName] = lastTable
+	credentialsPath := cfg.Credentials.ServiceAccounts[cfg.Credentials.ActiveAccount]
+	if c := cmd.String("credentials"); c != "" {
+		credentialsPath = c
+	}
+	if credentialsPath == "" {
+		return nil, fmt.Errorf("credentials file not passed")
 	}
 
-	lastSheetID, lastTableName := extractSheetIdAndName(cfg)
-	fmt.Printf("lastSheetID: %q\n", lastSheetID)
-
-	sheetID := getPrioritized(
-		cmd.Root().String(flags.Spreadsheet),
-		lastSheetID,
-	)
-	if sheetID == "" {
-		return nil, fmt.Errorf("no sheet ID provided")
+	tableID := cfg.Sheets.LastUsed.TableID
+	if s := cmd.String("spreadsheet"); s != "" {
+		tableID = s
+	}
+	if tableID == "" {
+		return nil, fmt.Errorf("table id not passed")
 	}
 
-	sheetName := getPrioritized(
-		cmd.Root().String(flags.Sheet),
-		lastTableName,
-	)
+	sheetName := cfg.Sheets.LastUsed.SheetName
+	if n := cmd.String("table"); n != "" {
+		sheetName = n
+	}
 	if sheetName == "" {
-		return nil, fmt.Errorf("no sheet name provided")
+		return nil, fmt.Errorf("sheet name not passed")
 	}
 
 	data := make(map[string]string, 3)
-	data[dataCredFile] = credFile
-	data[dataSheetID] = sheetID
+	data[dataCredFile] = credentialsPath
+	data[dataSheetID] = tableID
 	data[dataSheetName] = sheetName
-	lastSheet, lastTable := cfg.LastUsedTable()
-	data[dataLastSheetName] = lastSheet
-	data[dataLastTableName] = lastTable
-
 	return data, nil
 }
