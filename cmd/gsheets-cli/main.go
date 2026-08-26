@@ -23,8 +23,10 @@ func main() {
 		Name:    application.AppName,
 		Aliases: []string{},
 		Commands: []*cli.Command{
-			commands.Read(inf.Config),
 			commands.Fetch(inf.Config),
+			commands.Read(inf.Config),
+			commands.Edit(inf.Config),
+			commands.Sync(inf.Config),
 			commands.Update(inf.Config),
 			commands.ProfileCommand(inf.Config),
 			commands.TUI(inf.Config),

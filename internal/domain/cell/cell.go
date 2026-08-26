@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// Cell represents single cell from excel of google spreadsheet
 type Cell struct {
 	A1        string    `json:"a1"`
 	Row       int       `json:"row"`
@@ -15,6 +14,37 @@ type Cell struct {
 	Note      string    `json:"note,omitempty"`
 	Format    string    `json:"format,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// Новые поля для хранения исходных значений (до локального изменения)
+	OriginalValue string `json:"original_value,omitempty"`
+	OriginalNote  string `json:"original_note,omitempty"`
+	ValueChanged  bool   `json:"value_changed,omitempty"`
+	NoteChanged   bool   `json:"note_changed,omitempty"`
+}
+
+func (c *Cell) SetValue(new string) {
+	if !c.ValueChanged {
+		c.OriginalValue = c.Value
+		c.ValueChanged = true
+	}
+	c.Value = new
+	c.UpdatedAt = time.Now()
+}
+
+func (c *Cell) SetNote(new string) {
+	if !c.NoteChanged {
+		c.OriginalNote = c.Note
+		c.NoteChanged = true
+	}
+	c.Note = new
+	c.UpdatedAt = time.Now()
+}
+
+func (c *Cell) ResetOriginal() {
+	c.OriginalValue = ""
+	c.OriginalNote = ""
+	c.ValueChanged = false
+	c.NoteChanged = false
 }
 
 // NewFromRowCol creates cell with 1-based row-col position

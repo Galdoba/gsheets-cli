@@ -109,7 +109,7 @@ func (m SetupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateTableSelection(msg)
 	case StageProfileSelection:
 		// Not implemented yet; we'll return a placeholder.
-		return m, nil
+		return m.updateTableSelection(msg)
 	case StageDataFetch:
 		return m, nil
 	case StageViewer:

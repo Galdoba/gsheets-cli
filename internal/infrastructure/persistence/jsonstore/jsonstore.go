@@ -67,22 +67,17 @@ func (js *jsonStore) Load() (*sheet.SheetCache, error) {
 func (js *jsonStore) Merge(fetched *sheet.SheetCache) error {
 	js.mu.Lock()
 	defer js.mu.Unlock()
-
-	js.data.Grid = fetched.Grid
-	js.data.Rows = fetched.Rows
-	js.data.Cols = fetched.Cols
-	js.data.LastSync = fetched.LastSync
-
-	if fetched.RevisionID != "" {
-		js.data.RevisionID = fetched.RevisionID
-	}
-
+	fmt.Println("записываем", fetched.MatchRules)
+	js.data = fetched
+	fmt.Println("записали", js.data.MatchRules)
 	return nil
 }
 
 func (js *jsonStore) Save() error {
 	js.mu.Lock()
 	defer js.mu.Unlock()
+
+	fmt.Println("сохраняем", js.data.MatchRules)
 
 	dir := filepath.Dir(js.path)
 	if err := os.MkdirAll(dir, 0755); err != nil {

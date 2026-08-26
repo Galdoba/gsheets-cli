@@ -10,6 +10,7 @@ import (
 
 	"github.com/Galdoba/gsheets-cli/internal/domain/cell"
 	"github.com/Galdoba/gsheets-cli/internal/domain/render"
+	"github.com/Galdoba/gsheets-cli/internal/domain/rowmatch"
 	"google.golang.org/api/sheets/v4"
 )
 
@@ -17,13 +18,14 @@ import (
 // Grid is a dense 2‑D slice of cells indexed by [row][col] (0‑based).
 // An absent cell is represented by the zero value of cell.Cell (Row == 0).
 type SheetCache struct {
-	SpreadsheetTitle string        `json:"spreadsheet_title"`
-	SheetName        string        `json:"sheet_name"`
-	RevisionID       string        `json:"revision_id"`
-	LastSync         time.Time     `json:"last_sync"`
-	Rows             int           `json:"rows"`
-	Cols             int           `json:"cols"`
-	Grid             [][]cell.Cell `json:"grid"`
+	SpreadsheetTitle string           `json:"spreadsheet_title"`
+	SheetName        string           `json:"sheet_name"`
+	RevisionID       string           `json:"revision_id"`
+	LastSync         time.Time        `json:"last_sync"`
+	Rows             int              `json:"rows"`
+	Cols             int              `json:"cols"`
+	Grid             [][]cell.Cell    `json:"grid"`
+	MatchRules       *rowmatch.Config `json:"match_rules"`
 }
 
 // New creates an empty cache with no grid data.
@@ -55,84 +57,6 @@ func (sc *SheetCache) UpdateDimentions() {
 		sc.Cols = len(sc.Grid[0])
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Public CRUD (kept for programmatic local manipulation)
-// ---------------------------------------------------------------------------
-
-// CreateCell adds a new cell to the cache. Returns an error if the position
-// is already occupied by a non‑absent cell.
-// func (sc *SheetCache) CreateCell(c cell.Cell) error {
-// 	if err := c.Validate(); err != nil {
-// 		return fmt.Errorf("can't create invalid cell: %w", err)
-// 	}
-// 	rowIdx, colIdx := c.Row-1, c.Col-1
-// 	if rowIdx < 0 || colIdx < 0 {
-// 		return fmt.Errorf("invalid cell position")
-// 	}
-// 	// Expand grid if needed
-// 	sc.ensureGridSize(c.Row, c.Col)
-// 	if sc.Grid[rowIdx][colIdx].Row != 0 {
-// 		return fmt.Errorf("cell %q already exists", c.A1)
-// 	}
-// 	sc.Grid[rowIdx][colIdx] = c
-// 	sc.UpdateDimentions()
-// 	return nil
-// }
-
-// ReadCell returns the cell at A1 notation and true if it exists.
-// func (sc *SheetCache) ReadCell(a1 string) (cell.Cell, bool) {
-// 	row, col, err := cell.A1ToPosition(a1)
-// 	if err != nil {
-// 		return cell.Cell{}, false
-// 	}
-// 	rowIdx, colIdx := row-1, col-1
-// 	if rowIdx < len(sc.Grid) && colIdx < len(sc.Grid[rowIdx]) {
-// 		c := sc.Grid[rowIdx][colIdx]
-// 		if c.Row != 0 {
-// 			return c, true
-// 		}
-// 	}
-// 	return cell.Cell{}, false
-// }
-
-// UpdateCell modifies an existing cell. Returns an error if the cell does not
-// exist at that position.
-// func (sc *SheetCache) UpdateCell(c cell.Cell) error {
-// 	if err := c.Validate(); err != nil {
-// 		return fmt.Errorf("cell invalid: %w", err)
-// 	}
-// 	rowIdx, colIdx := c.Row-1, c.Col-1
-// 	if rowIdx < 0 || colIdx < 0 {
-// 		return fmt.Errorf("invalid cell position")
-// 	}
-// 	if rowIdx >= len(sc.Grid) || colIdx >= len(sc.Grid[rowIdx]) {
-// 		return fmt.Errorf("cell %q does not exist", c.A1)
-// 	}
-// 	if sc.Grid[rowIdx][colIdx].Row == 0 {
-// 		return fmt.Errorf("cell %q does not exist", c.A1)
-// 	}
-// 	sc.Grid[rowIdx][colIdx] = c
-// 	return nil
-// }
-
-// // Delete removes a cell from the cache. After deletion the position is
-// // considered empty. Returns an error if the cell was not present.
-// func (sc *SheetCache) Delete(a1 string) error {
-// 	row, col, err := cell.A1ToPosition(a1)
-// 	if err != nil {
-// 		return fmt.Errorf("cell %q does not exist", a1)
-// 	}
-// 	rowIdx, colIdx := row-1, col-1
-// 	if rowIdx >= len(sc.Grid) || colIdx >= len(sc.Grid[rowIdx]) {
-// 		return fmt.Errorf("cell %q does not exist", a1)
-// 	}
-// 	if sc.Grid[rowIdx][colIdx].Row == 0 {
-// 		return fmt.Errorf("cell %q does not exist", a1)
-// 	}
-// 	sc.Grid[rowIdx][colIdx] = cell.Cell{} // mark as absent
-// 	return nil
-// }
 
 // GetCell returns the cell at the given 1‑based row and column.
 func (sc *SheetCache) GetCell(row, col int) cell.Cell {
@@ -340,4 +264,106 @@ func ExtractSheetID(input string) string {
 		return rest[:end]
 	}
 	return input
+}
+
+//safeguard related
+
+func (sc *SheetCache) SetMatchConfig(cfg *rowmatch.Config) error {
+	if cfg == nil || len(cfg.Rules) == 0 {
+		return fmt.Errorf("match config is empty")
+	}
+	for _, r := range cfg.Rules {
+		if r.Column < 1 {
+			return fmt.Errorf("column must be >= 1")
+		}
+		if r.Weight < 0 || r.Weight > 1 {
+			return fmt.Errorf("weight must be in [0,1]")
+		}
+	}
+	sc.MatchRules = cfg
+	return nil
+}
+
+func (sc *SheetCache) Fingerprint(rowIdx int, config *rowmatch.Config) (rowmatch.Fingerprint, error) {
+	if rowIdx < 0 || rowIdx >= sc.Rows {
+		return rowmatch.Fingerprint{}, fmt.Errorf("row index %d out of range (0..%d)", rowIdx, sc.Rows-1)
+	}
+	if config == nil {
+		return rowmatch.Fingerprint{}, fmt.Errorf("nil config")
+	}
+	values := make(map[int]string)
+	for _, rule := range config.Rules {
+		if rule.Column < 1 || rule.Column > sc.Cols {
+			return rowmatch.Fingerprint{}, fmt.Errorf("column %d out of range (1..%d)", rule.Column, sc.Cols)
+		}
+		c := sc.GetCell(rowIdx+1, rule.Column)
+		val := c.Value
+		if c.OriginalValue != "" {
+			val = c.OriginalValue // берём старую версию для идентификации
+		}
+		values[rule.Column] = val
+	}
+	return rowmatch.NewFingerprint(rowIdx, values), nil
+}
+
+func (sc *SheetCache) ComputeFingerprints() ([]rowmatch.Fingerprint, error) {
+	if sc.MatchRules == nil || len(sc.MatchRules.Rules) == 0 {
+		return nil, fmt.Errorf("match config is empty")
+	}
+	fps := make([]rowmatch.Fingerprint, 0, sc.Rows)
+	for rowIdx := 0; rowIdx < sc.Rows; rowIdx++ {
+		fp, err := sc.Fingerprint(rowIdx, sc.MatchRules)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute fingerprint for row %d: %w", rowIdx+1, err)
+		}
+		fps = append(fps, fp)
+	}
+	return fps, nil
+}
+
+// Clone создаёт полную копию кэша (глубокая копия Grid).
+func (sc *SheetCache) Clone() *SheetCache {
+	clone := *sc
+	clone.Grid = make([][]cell.Cell, len(sc.Grid))
+	for i := range sc.Grid {
+		clone.Grid[i] = make([]cell.Cell, len(sc.Grid[i]))
+		copy(clone.Grid[i], sc.Grid[i])
+	}
+	if sc.MatchRules != nil {
+		cfgCopy := *sc.MatchRules
+		clone.MatchRules = &cfgCopy
+	}
+	return &clone
+}
+
+// CellChange описывает одно локальное изменение (для использования в sheet).
+type CellChange struct {
+	Row   int
+	Col   int
+	Field string // "value" или "note"
+	Value string
+}
+
+// ApplyChanges применяет список изменений к кэшу. Изменяемые ячейки сохраняют
+// исходные значения в OriginalValue/OriginalNote.
+func (sc *SheetCache) ApplyChanges(changes []CellChange) error {
+	for _, ch := range changes {
+		if ch.Row < 1 || ch.Col < 1 {
+			return fmt.Errorf("invalid cell position: row=%d col=%d", ch.Row, ch.Col)
+		}
+		c := sc.GetCell(ch.Row, ch.Col)
+		if c.Row == 0 {
+			return fmt.Errorf("cell %s does not exist", cell.PositionToA1(ch.Row, ch.Col))
+		}
+		switch strings.ToLower(ch.Field) {
+		case "", "value":
+			c.SetValue(ch.Value)
+		case "note":
+			c.SetNote(ch.Value)
+		default:
+			return fmt.Errorf("unsupported field %q", ch.Field)
+		}
+		sc.Grid[ch.Row-1][ch.Col-1] = c
+	}
+	return nil
 }
